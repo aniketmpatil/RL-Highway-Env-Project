@@ -1,0 +1,4 @@
+rl_venv
+**/__pycache__
+*.zip
+*.pyc
