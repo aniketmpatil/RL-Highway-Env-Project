@@ -8,7 +8,7 @@ gast==0.4.0
 google-auth==2.14.1
 google-auth-oauthlib==0.4.6
 google-pasta==0.2.0
-grpcio==1.50.0
+grpcio==1.51.0
 h5py==3.7.0
 idna==3.4
 importlib-metadata==5.0.0
@@ -34,7 +34,6 @@ tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.8.1
 tensorflow==2.9.1
 tensorflow-estimator==2.9.0
-tensorflow-gpu==2.9.0
 tensorflow-io-gcs-filesystem==0.27.0
 termcolor==2.1.1
 typing_extensions==4.4.0
