@@ -4,19 +4,20 @@ import csv
 import numpy as np
 import datetime
 import logging
-
+# import tensorflow.keras as K
 import tensorflow as tf
-from tf import keras
+from tf import keras 
 from keras.layers import Dense, Input
 from keras.models import Model, Sequential
 from keras.optimizers import Adam
 from keras.optimizers.schedules import PolynomialDecay
 from keras.losses import MeanAbsoluteError, MeanSquaredError
-
+import keras as K
 from .models import get_model
 
 class AgentPPO():
-    def __init__(self):
+    def __init__(self, opt = None):
+
         self.batch_size = 256
         self.lr = 5e-5
         self.epochs = 10
@@ -32,11 +33,89 @@ class AgentPPO():
         self.Target_kl = 0
         self.entropy = 0.001
 
+        self.policy = PolicyModel(opt)
+        self.val_loss = MeanSquaredError()
+        lr_schedule = PolynomialDecay(self.lr, self.target_steps // self.memory_size * 12 * self.epochs, end_learning_rate=0)
+        self.optimizer = Adam(learning_rate=lr_schedule if opt.lr_decay else self.lr)
+
         self.totals_steps = self.num_updates = 0
         self.best = self.eval_best = 0
         self.losses = []
 
+        # Initialise Replay Memory Buffer
         self.reset_memory()
+
+        # ----------------------------------------------------------------------------------------------------------------------
+
+        # Manage Logging Properties
+        time = '{0:%Y-%m-%d_%H-%M-%S}'.format(datetime.datetime.now())
+        self.logdir = f"{opt.exp_dir}/log_{time}"
+        os.mkdir(self.logdir)
+        
+        # Python Logging Gives Easier-to-read Outputs
+        logging.basicConfig(filename=self.logdir+'/log.log', format='%(message)s', filemode='w', level = logging.DEBUG)
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+
+        with open(self.logdir + '/log.csv', 'w+', newline ='') as file:
+            write = csv.writer(file)
+            write.writerow(['Total Steps', 'Avg Reward', 'Min Reward', 'Max Reward', 'Eval Reward', 'Avg Ep Length'])
+        
+        with open(self.logdir + '/opt.txt', 'w+', newline ='') as file:
+            args = dict((name, getattr(opt, name)) for name in dir(opt) if not name.startswith('_'))
+            for k, v in sorted(args.items()):
+                file.write('  %s: %s\n' % (str(k), str(v)))
+                
+        # Load Last Model if Resume is Specified
+        if opt.resume:
+            weights2load = K.models.load_model(f'{opt.exp_dir}/last_best.model').get_weights()
+            self.policy.set_weights(weights2load)
+            logging.info("Loaded Weights from Last Best Model!")
+
+        # -----------------------------------------------------------------------------------------------------------------------
+
+
+    # ----------------------------------------------------------------------------------------------
+    
+    def write_log(self, step, **logs):
+        """Write Episode Information to CSV File"""
+        line = [step] + [round(value, 3) for value in logs.values()]
+        with open(self.logdir + '/log.csv', 'a', newline ='') as file:
+            write = csv.writer(file)
+            write.writerow(line)
+
+    def callback(self, avg_reward):
+        """Write Training Information to Console"""
+        
+        self.avg_ep_len = self.memory_size / self.episode_counter
+        
+        logging.info(40*"-")
+        logging.info(f"Total Steps: {self.total_steps}")
+        logging.info(f"Average Train Reward: {avg_reward:.3f}")
+        logging.info(f"Average Train Ep Length: {self.avg_ep_len:.3f}")
+        logging.info(f"Average Eval Reward: {self.eval_reward:.3f}")
+        logging.info(f"Num. Model Updates: {self.num_updates}")
+        
+        if len(self.losses) > 0:
+            logging.info(f"Total Loss: {np.mean(self.losses):.5f}")
+            logging.info(f"Actor Loss: {np.mean(self.a_losses):.5f}")
+            logging.info(f"Critic Loss: {np.mean(self.c_losses):.5f}")
+            logging.info(f"Entropy Loss: {np.mean(self.e_losses):.5f}")
+            logging.info(f"Approx KL Div: {np.mean(self.kl_divs):.3f}")
+            logging.info(f"Explained Var: {self.explained_var:.3f}")
+            logging.info(f"Policy Std Dev: {np.exp(self.policy.log_std.numpy()).squeeze():.3f}")
+            logging.info(f"Learning Rate: {self.optimizer._decayed_lr('float32').numpy():.8f}")
+            
+        logging.info(40*"-")
+
+    # ----------------------------------------------------------------------------------------------
+    
+
+    def learn(self, env, opt):
+        # Run rollout and training sequence
+        while self.total_steps < self.target_steps:
+            self.collect_rollout(env, opt)
+            self.train()
+        self.policy.save(f'{opt.exp_dir}/model_last.model')
 
     def reset_memory(self):
         self.replay_memory = {
@@ -121,6 +200,30 @@ class AgentPPO():
             observation, r, done, _ = env.step(action)
             reward += r
         self.eval_reward = reward
+
+        # -------------------------------------------------------------------------------------------------------
+
+        # Show Training Progress on Console
+        self.callback(average_reward)
+
+        self.write_log(self.total_steps, reward_avg=average_reward, reward_min=minimum_reward,
+                       reward_max=maximum_reward, eval_reward=self.eval_reward, avg_ep_len=self.avg_ep_len)
+
+        # Save Model if Average Reward is Greater than a Minimum & Better than Before
+        if average_reward >= np.max([opt.minimum_reward, self.best]) and opt.save_model:
+            self.best = average_reward
+            self.policy.save(f'{opt.exp_dir}/R{average_reward:.0f}.model')
+        
+        # Save Model if Eval Reward is Greater than a Minimum & Better than Before
+        if self.eval_reward >= np.max([opt.minimum_reward, self.eval_best]) and opt.save_model:
+            self.eval_best = self.eval_reward
+            self.policy.save(f'{opt.exp_dir}/eval_R{self.eval_reward:.0f}.model')
+        
+        # Save Model Every 20 PPO Update Iterations
+        if self.total_steps % (20 * self.memory_size) == 0:
+            self.policy.save(f'{opt.exp_dir}/checkpoint_{self.total_steps}.model')
+
+        # ------------------------------------------------------------------------------------------------------------
 
 
     def process_replay(self, mem):
