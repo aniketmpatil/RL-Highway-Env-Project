@@ -447,20 +447,18 @@ class Critic(Model):
         # Build Critic Layers
         self.fc1 = Dense(self.fc1_dims, activation='relu')
         self.fc2 = Dense(self.fc2_dims, activation='relu')
-        self.q = Dense(1, activation=None)
+        self.v = Dense(1, activation=None)
 
 
     def call(self, state, action):
         """Run Forward Pass on Critic Network"""
-        concated = tf.concat([state, action], axis=1)
-
-        action_value = self.fc1(concated)
-        action_value = self.fc2(action_value)
+        x = self.fc1(tf.concat([state, action], axis=1))
+        x = self.fc2(x)
 
         # Get Q-Value from evaluating action and observation
-        q = self.q(action_value)
+        x = self.v(x)
 
-        return q
+        return x
 
 
 class Actor(Model):
@@ -491,13 +489,13 @@ class Actor(Model):
 
     def call(self, state):
         """Run Forward Pass on Actor Network"""
-        probability = self.fc1(state)
-        probability = self.fc2(probability)
+        x = self.fc1(state)
+        x = self.fc2(x)
 
         # Get action from evaluating observation
-        mu = self.mu(probability)
+        x = self.mu(x)
 
-        return mu
+        return x
 
 
 class OUNoise(object):
