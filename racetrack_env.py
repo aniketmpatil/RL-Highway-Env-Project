@@ -155,14 +155,14 @@ class RaceTrackEnv(AbstractEnv):
         return reward
 
 
-    def _is_terminated(self) -> bool:
+    def _is_terminal(self) -> bool:
         # Terminate episode if crashed, max steps exceeded or finished a lap ("i, a", max coords)
         return self.vehicle.crashed or self._is_goal() or \
             self.steps >= self.config["duration"] or \
             self.offroad_counter == self.offroad_threshold
 
-    def _is_truncated(self) -> bool:
-        return False
+    # def _is_truncated(self) -> bool:
+    #     return False
     
     
     def _reward_laning(self) -> int:

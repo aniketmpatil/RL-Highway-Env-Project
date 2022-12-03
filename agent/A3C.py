@@ -12,39 +12,14 @@ from threading import Thread
 
 from racetrack_env import RaceTrackEnv
 
-####### HYPERPARAMETERS #######
-NUM_ACTIONS = 1
-FC_LAYERS = 2
-FC_WIDTH = 256
-OBS_DIM = (2,18,18)
-NUM_WORKERS = None
-
-
-LR = 5e-4
-NUM_EPISODES = 0
-UPDATE_GLOBAL_FREQ = 500
-SAVE_MODEL = False
-MIN_REWARD = 0
-EXP_DIR = ""
-LOG_FREQ = 100
-EVAL_FREQ = 1000
-RMSPROP_EPSILON = 0.01
-
-A3C_GAMMA = 1
-ACTOR_COEF = 1.0
-CRITIC_COEF = 0.5
-ENTROPY_COEF = 0.01
-LR_DECAY = True
-###############################
-
 class ActorCritic(Model):
-    def __init__(self):
+    def __init__(self, params):
         super().__init__('ActorCriticModel')
+        self.num_actions = params['num_actions']
+        self.fc_layers = params['fc_layers']
+        self.fc_width = params['fc_width']
+        self.obs_dim = tuple(params['obs_dim'])
         self.create_model()
-        self.num_actions = NUM_ACTIONS
-        self.fc_layers = FC_LAYERS
-        self.fc_width = FC_WIDTH
-        self.obs_dim = OBS_DIM
 
     def create_model(self):
         self.feature_extractor = Sequential() ### LINEAR MODEL
@@ -93,19 +68,19 @@ class ActorCritic(Model):
 
 
 class A3CAgent():
-    def __init__(self):
-        self.policy_global = ActorCritic()   # Initialize Global Network
-        self.num_workers = cpu_count() if NUM_WORKERS == None else NUM_WORKERS
+    def __init__(self, params):
+        self.policy_global = ActorCritic(params)   # Initialize Global Network
+        self.num_workers = cpu_count() if params['num_workers'] == None else params['num_workers']
 
-    def learn(self, env, opt):
+    def learn(self, env, opt, params):
         workers = []
 
         for i in range(self.num_workers):
             env = RaceTrackEnv(opt)
-            workers.append(A3C_Worker(env, self.policy_global, i))
+            workers.append(A3C_Worker(env, self.policy_global, i, params))
     
         for worker in workers: worker.start()    
-        for worker in workers: workers.join()
+        for worker in workers: worker.join()
 
 class A3C_Worker(Thread):
     
@@ -118,33 +93,33 @@ class A3C_Worker(Thread):
     global_entropy_loss = []
     save_lock = threading.Lock()
 
-    def __init__(self, env, policy_global, worker_idx):
+    def __init__(self, env, policy_global, worker_idx, params):
         Thread.__init__(self)
         self.env = env
         self.policy_global = policy_global
-        self.num_episodes = NUM_EPISODES
-        self.num_actions = NUM_ACTIONS
-        self.obs_dim = OBS_DIM
-        self.update_global_freq = UPDATE_GLOBAL_FREQ
-        self.lr = LR
+        self.num_episodes = params['num_episodes']
+        self.num_actions = params['num_actions']
+        self.obs_dim = tuple(params['obs_dim'])
+        self.update_global_freq = params['update_global_freq']
+        self.lr = params['lr']
 
         self.worker_idx = worker_idx
-        self.save_model = SAVE_MODEL
-        self.min_reward = MIN_REWARD
-        self.exp_dir = EXP_DIR
-        self.log_freq = LOG_FREQ
-        self.eval_freq = EVAL_FREQ
-        self.rmsprop_epsilon = RMSPROP_EPSILON
+        self.save_model = params['save_model']
+        self.min_reward = params['min_reward']
+        self.exp_dir = params['exp_dir']
+        self.log_freq = params['log_dir']
+        self.eval_freq = params['eval_freq']
+        self.rmsprop_epsilon = params['rmsprop_epsilon']
 
-        self.a3c_gamma    = A3C_GAMMA
-        self.actor_loss_weight   = ACTOR_COEF
-        self.critic_loss_weight  = CRITIC_COEF
-        self.entropy_coeff = ENTROPY_COEF
+        self.a3c_gamma    = params['a3c_gamma']
+        self.actor_coeff   = params['actor_coeff']
+        self.critic_coeff  = params['critic_coeff']
+        self.entropy_coeff = params['entropy_coeff']
 
-        self.policy_local  = ActorCritic()
+        self.policy_local  = ActorCritic(params)
 
         lr_schedule = PolynomialDecay(self.lr, self.num_episodes*200, end_learning_rate=0)
-        self.optimizer = RMSprop(learning_rate=lr_schedule if LR_DECAY else self.lr, epsilon=self.rmsprop_epsilon)
+        self.optimizer = RMSprop(learning_rate=lr_schedule if params['lr_decay'] else self.lr, epsilon=self.rmsprop_epsilon)
 
         ## LOGGING MISSING
         
@@ -165,7 +140,7 @@ class A3C_Worker(Thread):
         else: ret = next_v
 
         for i in reversed(range(0, len(rewards))):
-            ret = rewards[i] + self.A3C_GAMMA * ret
+            ret = rewards[i] + self.a3c_gamma * ret
             td_targets[i] = ret
         return td_targets
 
@@ -198,6 +173,11 @@ class A3C_Worker(Thread):
                     td_targets = self.td_target(rews, next_v, done)
                     td_targets = np.array(td_targets)
 
+                    values     = self.policy_local.critic_network(self.policy_local.feature_extractor(obss), training=False).numpy()
+
+                    advs       = td_targets - values
+                    advs       = np.array(advs)
+
                     advs = (advs - advs.mean()) / (advs.std() + 1e-8)
 
                     acts = tf.constant(acts, tf.float32)
@@ -210,9 +190,9 @@ class A3C_Worker(Thread):
                         a_loss = self.actor_loss(mu, var, acts, advs)
                         c_loss = self.critic_loss(v_pred, td_targets)
 
-                        total_loss = self.actor_loss_weight * a_loss + self.critic_loss_weight * c_loss
+                        total_loss = self.actor_coeff * a_loss + self.critic_coeff * c_loss
 
-                        grad = tape.Gradient(total_loss, self.policy_local.trainable_variables, unconnected_gradients=tf.UnconnectedGradients.ZERO)
+                        grad = tape.gradient(total_loss, self.policy_local.trainable_variables, unconnected_gradients=tf.UnconnectedGradients.ZERO)
                         grad, _ = tf.clip_by_global_norm(grad, 0.5)
                         self.optimizer.apply_gradients(zip(grad, self.policy_global.trainable_variables))
 

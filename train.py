@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 # import tensorflow.keras as keras
 
 from racetrack_env import RaceTrackEnv
-from algorithms.A3C import A3CAgent
+from agent.A3C import A3CAgent
 
 A3C_GAMMA = 0.99
 RMSPROP_EPSILON = 1e-5
