@@ -25,3 +25,8 @@ source rl_venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
+## Training:
+
+### A3C Training:
+
+python3 ./train.py --agent A3C --exp_id a3c1 --num_episodes 5000 --batch_size 256 --epsilon 0.6 --min_epsilon 0 --lr 0.00005 --lr_decay --arch Identity --fc_layers 3 --spawn_vehicles 3
