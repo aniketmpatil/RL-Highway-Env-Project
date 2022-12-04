@@ -12,14 +12,14 @@ import numpy as np
 import datetime
 import logging
 
-def Identity(obs_shape):
-    model = Sequential()
-    model.add(Permute((3,2,1), input_shape=obs_shape))
-    model.add(Flatten())
-    return model
-model_factory = {"Identity":Identity}
-def get_model(params):
-    return model_factory[params['arch']](params['obs_dim'])
+# def Identity(obs_shape):
+#     model = Sequential()
+#     model.add(Permute((3,2,1), input_shape=obs_shape))
+#     model.add(Flatten())
+#     return model
+# model_factory = {"Identity":Identity}
+# def get_model(params):
+#     return model_factory[params['arch']](params['obs_dim'])
 
 class PPO():
     """Proximal Policy Optimisation Agent with Clipping"""
@@ -80,12 +80,13 @@ class PPO():
                     file.write('  %s: %s\n' % (str(k), str(v)))
                     
             # Load Last Model if Resume is Specified
-            # if params['resume']:
-            #     weights2load = K.models.load_model(
-            #         f'{params['exp_dir']}/last_best.model').get_weights()
-            #     self.policy.set_weights(weights2load)
-            #     logging.info("Loaded Weights from Last Best Model!")
+            if params['resume']:
+                weights2load = K.models.load_model(
+                    f'{self.exp_dir}/last_best.model').get_weights()
+                self.policy.set_weights(weights2load)
+                logging.info("Loaded Weights from Last Best Model!")
 
+    
     def write_log(self, step, **logs):
         """Write Episode Information to CSV File"""
         line = [step] + [round(value, 3) for value in logs.values()]
@@ -346,12 +347,19 @@ class PolicyModel(Model):
         """Pass Model Parameters from params & Initialise Learnable Log Std Param"""
         super().__init__('PolicyModel')
         self.build_model(params)
+        self.obs_dim = params['obs_dim']
         self.log_std = tf.Variable(initial_value=-0.5*np.ones(params['num_actions'], dtype=np.float32))
         
+    def Identity(self, obs_shape):
+        model = Sequential()
+        model.add(Permute((3,2,1), input_shape=obs_shape))
+        model.add(Flatten())
+        return model
+
     def build_model(self, params):
         """Build Model Layers & Architecture"""
         
-        self.feature_extractor = get_model(params)
+        self.feature_extractor = PolicyModel.Identity(self,params['obs_dim'])
         
         # Retrieve Post-Feature Extractor Dimensions
         for layer in self.feature_extractor.layers:
