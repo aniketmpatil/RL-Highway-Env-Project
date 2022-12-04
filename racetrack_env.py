@@ -267,7 +267,6 @@ class RaceTrackEnv(AbstractEnv):
         road = Road(network=net, np_random=self.np_random, record_history=self.config["show_trajectories"])
         self.road = road
 
-
     def _make_vehicles(self) -> None:
 
         # Initialise the Agent Vehicle

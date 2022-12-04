@@ -1,6 +1,5 @@
 from gym.wrappers import record_video
 from racetrack_env import RaceTrackEnv
-
 import argparse
 import numpy as np
 import tensorflow
@@ -8,7 +7,6 @@ import keras
 import os
 import gym
 import matplotlib.pyplot as plt
-
 from agent.AgentPPO import PPO
 
 GET_AGENT = {"PPO" : PPO}
@@ -29,7 +27,7 @@ class opts(object):
         
         # Configuration Settings
         self.parser.add_argument('--mode', default='train', help='Train, Test, Manual')
-        self.parser.add_argument('--agent', default='PPO', help='DQN, DDPG, A3C, PPO')
+        self.parser.add_argument('--agent', default='PPO', help='DDPG, A3C, PPO')
         self.parser.add_argument('--exp_id', default='default', help='Unique Experiment Name for Saving Logs & Models')
         self.parser.add_argument('--resume', action='store_true', help='Whether to Load Last Model for Further Training')
         self.parser.add_argument('--load_model', default=None, help='Model to load for Testing')
@@ -110,31 +108,15 @@ if __name__ == "__main__":
         agent.learn(env, opt)
 
     elif opt.mode == "test":
-        
         total_reward, obs, done, seq = 0, env.reset(), False, []
         
-        if opt.agent in ["DQN", "CDQN"]:
-
-            model = keras.models.load_model(opt.load_model)
-            
-            while not done:
-                action_idx = model.predict(np.array([obs])/255)[0]
-                action_idx = np.argmax(action_idx)
-                obs, reward, done, _ = env.step(DISCRETE_ACTION_SPACE[action_idx] if opt.num_actions == 2 else
-                                                SIMPLE_DISCRETE_ACTION_SPACE[action_idx])
-                total_reward += reward
-                print(reward)
-            print("Total Reward: ", total_reward)
-            
-        elif opt.agent in ["DDPG"]:
-
+        if opt.agent in ["DDPG"]:
             agent = GET_AGENT[opt.agent](opt=opt)
             agent.initialize_networks(obs)
             if opt.ddpg_best == True:
                 agent.load_best()
             else:
                 agent.load_models()
-
             while not done:
                 action = agent.select_action(np.expand_dims(obs/255, axis=0), env, test_model=True)
                 obs, reward, done, _ = env.step(action)
@@ -143,9 +125,7 @@ if __name__ == "__main__":
             print("Total Reward:", total_reward)
 
         else:
-            
-            model = keras.models.load_model(opt.load_model)
-                     
+            model = keras.models.load_model(opt.load_model)   
             while not done:
                 action = model(np.array([obs]))[0]
                 obs, reward, done, info = env.step(action)
@@ -154,12 +134,9 @@ if __name__ == "__main__":
             print("Total Reward: ", total_reward)
             
     elif opt.mode == "manual":
-        
         env.configure({"manual_control": True})
         obs = env.reset()
-        # display_observations(obs)
         total_reward, done = 0, False
-        
         while not done:
             obs, reward, done, _ = env.step(env.action_space.sample())
             total_reward += reward
