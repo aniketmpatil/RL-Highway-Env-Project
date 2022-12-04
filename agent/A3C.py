@@ -1,4 +1,6 @@
 import numpy as np
+import logging, datetime, os
+import sys, csv
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorflow.keras.models import Model, Sequential
@@ -70,11 +72,11 @@ class ActorCritic(Model):
 class A3CAgent():
     def __init__(self, params):
         self.policy_global = ActorCritic(params)   # Initialize Global Network
-        self.num_workers = cpu_count() if params['num_workers'] == None else params['num_workers']
+        self.num_workers = cpu_count() if params['num_workers'] == -1 else params['num_workers']
 
     def learn(self, env, opt, params):
         workers = []
-
+        print("Number of workers: ", self.num_workers)
         for i in range(self.num_workers):
             env = RaceTrackEnv(opt)
             workers.append(A3C_Worker(env, self.policy_global, i, params))
@@ -107,7 +109,7 @@ class A3C_Worker(Thread):
         self.save_model = params['save_model']
         self.min_reward = params['min_reward']
         self.exp_dir = params['exp_dir']
-        self.log_freq = params['log_dir']
+        self.log_freq = params['log_freq']
         self.eval_freq = params['eval_freq']
         self.rmsprop_epsilon = params['rmsprop_epsilon']
 
@@ -121,8 +123,52 @@ class A3C_Worker(Thread):
         lr_schedule = PolynomialDecay(self.lr, self.num_episodes*200, end_learning_rate=0)
         self.optimizer = RMSprop(learning_rate=lr_schedule if params['lr_decay'] else self.lr, epsilon=self.rmsprop_epsilon)
 
-        ## LOGGING MISSING
+        time = '{0:%Y-%m-%d_%H:%M:%S}'.format(datetime.datetime.now())
+        self.logdir = f"{params['exp_dir']}/log_{time}"
+        try:
+            os.makedirs(self.logdir)
+        except OSError:
+            pass
+
+        logging.basicConfig(filename=self.logdir+'/log.log', format='%(message)s', filemode='w', level = logging.DEBUG)
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+
+        with open(self.logdir + '/log.csv', 'w+', newline ='') as file:
+            write = csv.writer(file)
+            write.writerow(['Total Steps', 'Avg Reward', 'Max Reward', 'Min Reward', 'Avg Actor Loss', 'Avg Critic Loss'])
+            
+        with open(self.logdir + '/opt.txt', 'w+', newline ='') as file:
+            # args = dict((name, getattr(opt, name)) for name in dir(opt) if not name.startswith('_'))
+            args = params
+            for k, v in sorted(args.items()):
+                file.write('  %s: %s\n' % (str(k), str(v)))
         
+    def write_log(self):
+        """Record to Log File"""
+        
+        logging.info(40*"-")
+        logging.info(f"Worker: {self.worker_idx}")
+        logging.info(f"Global Steps: {A3C_Worker.global_episode}")
+        logging.info(f"Rewards: {self.ep_reward}")
+        logging.info(f"Episode Steps: {self.ep_lengths}")
+
+        if len(self.a_losses) > 0 or len(self.c_losses) > 0:
+            logging.info(f"Total Loss: {np.mean(self.total_losses):.5f}")
+            logging.info(f"Actor Loss: {np.mean(self.a_losses):.5f}")
+            logging.info(f"Critic Loss: {np.mean(self.c_losses):.5f}")
+            
+        logging.info(40*"-")
+
+
+    def write_csv(self, step, g_mean_rews, g_max_rews, g_min_rews, g_a_loss, g_c_loss):
+        """Record to CSV File"""
+
+        line = [step, g_mean_rews, g_max_rews, g_min_rews, g_a_loss, g_c_loss]
+        with open(self.logdir + '/log.csv', 'a', newline ='') as file:
+            write = csv.writer(file)
+            write.writerow(line)
+
+
     def reset_memory(self):
         self.obss_batch = np.zeros((self.update_global_freq, *self.obs_dim))
         self.acts_batch = np.zeros((self.update_global_freq, self.num_actions))
@@ -221,6 +267,26 @@ class A3C_Worker(Thread):
             min_global_reward = round(np.min(A3C_Worker.global_total_reward[-self.log_freq:]),3)
             avg_actor_loss    = round(np.mean(A3C_Worker.global_actor_loss[-self.log_freq:]),3)
             avg_critic_loss   = round(np.mean(A3C_Worker.global_critic_loss[-self.log_freq:]),3)
+
+            # Write to Log and CSV
+            if A3C_Worker.global_episode % self.log_freq == 0:
+                self.write_log()
+                self.write_csv(A3C_Worker.global_episode, avg_global_reward, max_global_reward, min_global_reward, \
+                               avg_actor_loss, avg_critic_loss)
+
+            # Save Model if Episode Reward is Greater than a Minimum & Better than Before
+            if self.ep_reward >= np.max([self.min_reward, A3C_Worker.global_best]) and self.save_model:
+                with A3C_Worker.save_lock:
+                    logging.info(f"Saving Model! Worker: {self.worker_idx}, Episode Score: {self.ep_reward}")
+                    self.policy_local.save(f'{self.exp_dir}/R{self.ep_reward:.0f}.model')
+                    A3C_Worker.global_best = self.ep_reward
+
+            # Save Model for Every 500 Episodes to Check Training Progress
+            if A3C_Worker.global_episode % 500 == 0:
+                global_episode = A3C_Worker.global_episode
+                with A3C_Worker.save_lock:
+                    logging.info(f"Saving Every 500th Model! Worker: {self.worker_idx}, Episode Score: {self.ep_reward}")
+                    self.policy_local.save(f'{self.exp_dir}/checkpoint_{global_episode}.model')
 
     def actor_loss(self, mu, var, action, adv):
         probability_density_func = tfp.distributions.Normal(mu, var)

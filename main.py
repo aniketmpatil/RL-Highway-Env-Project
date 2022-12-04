@@ -8,7 +8,7 @@ import tensorflow.keras as keras
 from racetrack_env import RaceTrackEnv
 
 ## Import all agents
-# from agent.A3C import A3CAgent
+from agent.A3C import A3CAgent
 # from agent.DDPG import DDPGAgent
 # from agent.PPO import PPOAgent
 
