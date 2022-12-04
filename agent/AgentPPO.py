@@ -12,47 +12,46 @@ import numpy as np
 import datetime
 import logging
 
-
 def Identity(obs_shape):
     model = Sequential()
     model.add(Permute((3,2,1), input_shape=obs_shape))
     model.add(Flatten())
     return model
 model_factory = {"Identity":Identity}
-def get_model(opt):
-    return model_factory[opt.arch](opt.obs_dim)
+def get_model(params):
+    return model_factory[params['arch']](params['obs_dim'])
 
 class PPO():
     """Proximal Policy Optimisation Agent with Clipping"""
-    def __init__(self, opt=None):
+    def __init__(self, params):
             # Configs & Hyperparameters
-            self.name = "{}_{}_{}Actions".format(opt.agent, opt.arch, opt.num_actions)
-            self.lr = opt.lr
-            self.epochs = opt.num_epochs
-            self.batch_size = opt.batch_size
-            self.num_actions = opt.num_actions
-            self.obs_dim = opt.obs_dim
-            self.memory_size = opt.ppo_memory_size
-            self.target_steps = 200 * opt.num_episodes
-
+            self.name = "{}_{}_{}Actions".format(params['agent'], params['arch'], params['num_actions'])
+            self.lr = params['lr']
+            self.epochs = params['num_epochs']
+            self.batch_size = params['batch_size']
+            self.num_actions = params['num_actions']
+            self.obs_dim = params['obs_dim']
+            self.memory_size = params['ppo_memory_size']
+            self.target_steps = 200 * params['num_episodes']
+            self.exp_dir = params['exp_dir']
             # PPO Hyperparameters
-            self.GAE_GAMMA = opt.gae_gamma
-            self.GAE_LAMBDA = opt.gae_lambda
+            self.GAE_GAMMA = params['gae_gamma']
+            self.GAE_LAMBDA = params['gae_lambda']
 
             # ppo epsilon for clipping the r theta value
-            self.PPO_EPSILON = opt.ppo_epsilon
+            self.PPO_EPSILON = params['ppo_epsilon']
 
             # kl divergence
-            self.TARGET_KL = opt.target_kl 
+            self.TARGET_KL = params['target_kl'] 
 
             # entropy required to find entropy loss 
             self.ENTROPY = 0.001
 
             # Instantiate Model & Optimizer
-            self.policy = PolicyModel(opt)
+            self.policy = PolicyModel(params)
             self.val_loss = MeanSquaredError()
             lr_schedule = PolynomialDecay(self.lr, self.target_steps // self.memory_size * 12 * self.epochs, end_learning_rate=0)
-            self.optimizer = Adam(learning_rate=lr_schedule if opt.lr_decay else self.lr)
+            self.optimizer = Adam(learning_rate=lr_schedule if params['lr_decay'] else self.lr)
 
             # Variables to Track Training Progress & Experience Replay Buffer
             self.total_steps = self.num_updates = 0
@@ -64,7 +63,7 @@ class PPO():
 
             # Manage Logging Properties
             time = '{0:%Y-%m-%d_%H-%M-%S}'.format(datetime.datetime.now())
-            self.logdir = f"{opt.exp_dir}/log_{time}"
+            self.logdir = f"{params['exp_dir']}/log_{time}"
             os.mkdir(self.logdir)
             
             # Python Logging Gives Easier-to-read Outputs
@@ -76,15 +75,16 @@ class PPO():
                 write.writerow(['Total Steps', 'Avg Reward', 'Min Reward', 'Max Reward', 'Eval Reward', 'Avg Ep Length'])
             
             with open(self.logdir + '/opt.txt', 'w+', newline ='') as file:
-                args = dict((name, getattr(opt, name)) for name in dir(opt) if not name.startswith('_'))
+                args = dict((name, getattr(params, name)) for name in dir(params) if not name.startswith('_'))
                 for k, v in sorted(args.items()):
                     file.write('  %s: %s\n' % (str(k), str(v)))
                     
             # Load Last Model if Resume is Specified
-            if opt.resume:
-                weights2load = K.models.load_model(f'{opt.exp_dir}/last_best.model').get_weights()
-                self.policy.set_weights(weights2load)
-                logging.info("Loaded Weights from Last Best Model!")
+            # if params['resume']:
+            #     weights2load = K.models.load_model(
+            #         f'{params['exp_dir']}/last_best.model').get_weights()
+            #     self.policy.set_weights(weights2load)
+            #     logging.info("Loaded Weights from Last Best Model!")
 
     def write_log(self, step, **logs):
         """Write Episode Information to CSV File"""
@@ -117,12 +117,12 @@ class PPO():
             
         logging.info(40*"-")
 
-    def learn(self, env, opt):
+    def learn(self, env, params):
         """Run Rollout & Training Sequence"""
         while self.total_steps < self.target_steps:
-            self.collect_rollout(env, opt)
+            self.collect_rollout(env, params)
             self.train()
-        self.policy.save(f'{opt.exp_dir}/model_last.model')
+        self.policy.save(f'{params.exp_dir}/model_last.model')
     
     def reset_memory(self):
         """Reset Agent Replay Memory Buffer"""
@@ -146,7 +146,7 @@ class PPO():
         self.replay_memory["done"][step] = done
         self.replay_memory["last_ep_starts"][step] = last_ep_start
     
-    def collect_rollout(self, env, opt):
+    def collect_rollout(self, env, params):
         """Collect Experiences from Environment for Training"""
         
         ep_rewards = []
@@ -198,18 +198,18 @@ class PPO():
                        reward_max=max_reward, eval_reward=self.eval_reward, avg_ep_len=self.avg_ep_len)
 
         # Save Model if Average Reward is Greater than a Minimum & Better than Before
-        if average_reward >= np.max([opt.min_reward, self.best]) and opt.save_model:
+        if average_reward >= np.max([params['min_reward'], self.best]) and params.save_model:
             self.best = average_reward
-            self.policy.save(f'{opt.exp_dir}/R{average_reward:.0f}.model')
+            self.policy.save(f'{self.exp_dir}/R{average_reward:.0f}.model')
         
         # Save Model if Eval Reward is Greater than a Minimum & Better than Before
-        if self.eval_reward >= np.max([opt.min_reward, self.eval_best]) and opt.save_model:
+        if self.eval_reward >= np.max([params['min_reward'], self.eval_best]) and params.save_model:
             self.eval_best = self.eval_reward
-            self.policy.save(f'{opt.exp_dir}/eval_R{self.eval_reward:.0f}.model')
+            self.policy.save(f'{self.exp_dir}/eval_R{self.eval_reward:.0f}.model')
         
         # Save Model Every 20 PPO Update Iterations
         if self.total_steps % (20 * self.memory_size) == 0:
-            self.policy.save(f'{opt.exp_dir}/checkpoint_{self.total_steps}.model')
+            self.policy.save(f'{self.exp_dir}/checkpoint_{self.total_steps}.model')
 
     def process_replay(self, mem):
         """Process Episode Information for Value & Advantages"""
@@ -317,9 +317,9 @@ class PPO():
                 # Compute KL Divergence for Early Stopping Before Backprop
                 kl_div = 0.5 * tf.reduce_mean(tf.square(new_log_probs - probabilities))
 
-                if self.TARGET_KL != None and kl_div > self.TARGET_KL:
-                    logging.info(f"Early stopping at epoch {epoch+1} due to reaching max kl: {kl_div:.3f}")
-                    break
+                # if self.TARGET_KL != None and kl_div > self.TARGET_KL:
+                #     logging.info(f"Early stopping at epoch {epoch+1} due to reaching max kl: {kl_div:.3f}")
+                #     break
                 
                 # Compute Gradients & Apply to Model
                 gradients = tape.gradient(tot_loss, self.policy.trainable_variables)
@@ -342,16 +342,16 @@ class PPO():
 class PolicyModel(Model):
     """Actor Critic Policy Model for PPO"""
     
-    def __init__(self, opt):
-        """Pass Model Parameters from Opt & Initialise Learnable Log Std Param"""
+    def __init__(self, params):
+        """Pass Model Parameters from params & Initialise Learnable Log Std Param"""
         super().__init__('PolicyModel')
-        self.build_model(opt)
-        self.log_std = tf.Variable(initial_value=-0.5*np.ones(opt.num_actions, dtype=np.float32))
+        self.build_model(params)
+        self.log_std = tf.Variable(initial_value=-0.5*np.ones(params['num_actions'], dtype=np.float32))
         
-    def build_model(self, opt):
+    def build_model(self, params):
         """Build Model Layers & Architecture"""
         
-        self.feature_extractor = get_model(opt)
+        self.feature_extractor = get_model(params)
         
         # Retrieve Post-Feature Extractor Dimensions
         for layer in self.feature_extractor.layers:
@@ -361,11 +361,11 @@ class PolicyModel(Model):
         self.actor_network = Sequential()
         self.critic_network = Sequential()
         
-        for _ in range(opt.fc_layers):
-            self.actor_network.add(Dense(opt.fc_width, activation='tanh'))
-            self.critic_network.add(Dense(opt.fc_width, activation='tanh'))
+        for _ in range(params['fc_layers']):
+            self.actor_network.add(Dense(params['fc_width'], activation='tanh'))
+            self.critic_network.add(Dense(params['fc_width'], activation='tanh'))
         
-        self.actor_network.add(Dense(opt.num_actions, activation='tanh'))
+        self.actor_network.add(Dense(params['num_actions'], activation='tanh'))
         self.critic_network.add(Dense(1))
         
         #  Build the actor network
