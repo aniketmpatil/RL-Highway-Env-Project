@@ -1,7 +1,5 @@
-import tensorflow as tf
-import keras
 from keras.models import Model, Sequential
-from keras.layers import Dense, Input
+from keras.layers import Dense,Flatten, Permute
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
 from keras.losses import MeanSquaredError
@@ -13,25 +11,20 @@ import csv
 import numpy as np
 import datetime
 import logging
-from models import get_model
 
-# import tensorflow as tf
-# print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-# tf.debugging.set_log_device_placement(True)
 
-"""PPO Pseudocode"""
-# Initial Policy Parameters and Initial Value Function parameters
-#     For Num Steps, Do:
-#         Collect Trajectories by Running Policy in Environment for n Steps
-#         Compute Advantages & Return Estimates with Value Function
-#         Update Policy by Maximizing PPO-clip Objective via Adam
-#         Update Value Function by Regression with MSE error via Adam
+def Identity(obs_shape):
+    model = Sequential()
+    model.add(Permute((3,2,1), input_shape=obs_shape))
+    model.add(Flatten())
+    return model
+model_factory = {"Identity":Identity}
+def get_model(opt):
+    return model_factory[opt.arch](opt.obs_dim)
 
 class PPO():
     """Proximal Policy Optimisation Agent with Clipping"""
-
     def __init__(self, opt=None):
-
             # Configs & Hyperparameters
             self.name = "{}_{}_{}Actions".format(opt.agent, opt.arch, opt.num_actions)
             self.lr = opt.lr
@@ -100,14 +93,14 @@ class PPO():
             write = csv.writer(file)
             write.writerow(line)
 
-    def callback(self, avg_reward):
+    def callback(self, average_reward):
         """Write Training Information to Console"""
         
         self.avg_ep_len = self.memory_size / self.episode_counter
         
         logging.info(40*"-")
         logging.info(f"Total Steps: {self.total_steps}")
-        logging.info(f"Average Train Reward: {avg_reward:.3f}")
+        logging.info(f"Average Train Reward: {average_reward:.3f}")
         logging.info(f"Average Train Ep Length: {self.avg_ep_len:.3f}")
         logging.info(f"Average Eval Reward: {self.eval_reward:.3f}")
         logging.info(f"Num. Model Updates: {self.num_updates}")
@@ -134,65 +127,50 @@ class PPO():
     def reset_memory(self):
         """Reset Agent Replay Memory Buffer"""
         self.replay_memory = {
-            "obss" : np.zeros((self.memory_size, *self.obs_dim,)),
-            "acts" : np.zeros((self.memory_size, self.num_actions,)),
-            "rews" : np.zeros(self.memory_size),
-            "vals" : np.zeros(self.memory_size),
-            "prbs" : np.zeros(self.memory_size),
+            "observations" : np.zeros((self.memory_size, *self.obs_dim,)),
+            "actions" : np.zeros((self.memory_size, self.num_actions,)),
+            "rewards" : np.zeros(self.memory_size),
+            "values" : np.zeros(self.memory_size),
+            "probabilities" : np.zeros(self.memory_size),
             "done" : np.zeros(self.memory_size),
             "last_ep_starts" : np.zeros(self.memory_size)
         }
 
     def update_replay(self, step, obs, act, rew, val, prb, done, last_ep_start):
         """Record Stepwise Episode Information with Critic Output"""
-        self.replay_memory["obss"][step] = obs
-        self.replay_memory["acts"][step] = act
-        self.replay_memory["rews"][step] = rew
-        self.replay_memory["vals"][step] = val
-        self.replay_memory["prbs"][step] = prb
+        self.replay_memory["observations"][step] = obs
+        self.replay_memory["actions"][step] = act
+        self.replay_memory["rewards"][step] = rew
+        self.replay_memory["values"][step] = val
+        self.replay_memory["probabilities"][step] = prb
         self.replay_memory["done"][step] = done
         self.replay_memory["last_ep_starts"][step] = last_ep_start
     
     def collect_rollout(self, env, opt):
         """Collect Experiences from Environment for Training"""
         
-        # For Logging of Agent Performance
         ep_rewards = []
         num_steps = 0
         self.episode_counter = 0
         self.last_obs = env.reset()
 
-        # printProgressBar(0, self.memory_size, prefix = 'Rollout Collection:', suffix = 'Complete', length = 50)
-        
         while num_steps != self.memory_size - 1:
-
             steps, done = 0, False
             last_ep_start = True
             ep_reward = 0
-
             while True:
-
-                # Get Action & Step Environment
                 action, value, logp = self.policy.act(self.last_obs)
                 new_obs, reward, done, _ = env.step(action)
-                
-                # Break Early if Rollout has Been Filled, Mark Step as End
                 if done or num_steps == self.memory_size - 1:
                     self.update_replay(num_steps, self.last_obs, action, reward, value, logp, done, last_ep_start)
                     self.episode_counter += 1
                     break
-                
                 self.update_replay(num_steps, self.last_obs, action, reward, value, logp, done, last_ep_start)
                 self.last_obs = new_obs
                 last_ep_start = done
-                
-                # Increment Step Counters
                 steps += 1
                 num_steps += 1
-                ep_reward += reward
-                
-                # printProgressBar(num_steps+1, self.memory_size, prefix = 'Rollout Collection:', suffix = 'Complete', length = 50)
-
+                ep_reward += reward 
             self.last_obs = env.reset()
             ep_rewards.append(ep_reward)
         
@@ -200,8 +178,8 @@ class PPO():
         _, self.last_val, _ = self.policy.act(new_obs)
         self.total_steps += num_steps + 1
 
-        # Log Memory Buffer Information & Write to CSV
-        avg_reward = np.mean(ep_rewards)
+        # Find average, minimum, and maximum reward
+        average_reward = np.mean(ep_rewards)
         min_reward = np.min(ep_rewards)
         max_reward = np.max(ep_rewards)
         
@@ -214,15 +192,15 @@ class PPO():
         self.eval_reward = rew
             
         # Show Training Progress on Console
-        self.callback(avg_reward)
+        self.callback(average_reward)
 
-        self.write_log(self.total_steps, reward_avg=avg_reward, reward_min=min_reward,
+        self.write_log(self.total_steps, reward_avg=average_reward, reward_min=min_reward,
                        reward_max=max_reward, eval_reward=self.eval_reward, avg_ep_len=self.avg_ep_len)
 
         # Save Model if Average Reward is Greater than a Minimum & Better than Before
-        if avg_reward >= np.max([opt.min_reward, self.best]) and opt.save_model:
-            self.best = avg_reward
-            self.policy.save(f'{opt.exp_dir}/R{avg_reward:.0f}.model')
+        if average_reward >= np.max([opt.min_reward, self.best]) and opt.save_model:
+            self.best = average_reward
+            self.policy.save(f'{opt.exp_dir}/R{average_reward:.0f}.model')
         
         # Save Model if Eval Reward is Greater than a Minimum & Better than Before
         if self.eval_reward >= np.max([opt.min_reward, self.eval_best]) and opt.save_model:
@@ -237,9 +215,9 @@ class PPO():
         """Process Episode Information for Value & Advantages"""
 
         # Calculate Values & Log Probs
-        vals = mem["vals"]
-        rews = mem["rews"]
-        prbs = mem["prbs"]
+        vals = mem["values"]
+        rews = mem["rewards"]
+        probabilities = mem["probabilities"]
         done = mem["done"][-1]
         last_ep_starts = mem["last_ep_starts"]
         
@@ -247,8 +225,8 @@ class PPO():
         l = self.GAE_LAMBDA
 
         # Initialise Return Arrays with Appropriate Shapes
-        advs = np.empty((self.memory_size,))
-        rets = np.empty((self.memory_size,))
+        advantages = np.empty((self.memory_size,))
+        returns = np.empty((self.memory_size,))
 
         # Calculate Advantages & Returns
         last_adv = 0
@@ -262,11 +240,11 @@ class PPO():
                 next_value = vals[step + 1]
             delta = rews[step] + g * next_value * next_non_terminal - vals[step]
             last_adv = delta + g * l * next_non_terminal * last_adv
-            advs[step] = last_adv
+            advantages[step] = last_adv
 
-        rets = advs + vals
+        returns = advantages + vals
 
-        return mem["obss"], mem["acts"], advs, rets, vals, prbs
+        return mem["observations"], mem["actions"], advantages, returns, vals, probabilities
     
     def train(self):
         """Train Agent by Consuming Collected Memory Buffer"""
@@ -284,51 +262,60 @@ class PPO():
         self.e_losses = []
         self.kl_divs = []
 
+        # Starting the training
         for epoch in range(self.epochs):
             print("Epoch: ",epoch)
             for batch_idx in range(0, self.memory_size, self.batch_size): 
 
                 # Go Through Buffer Batch Size at a Time
-                obss = buffer_obss[ind[batch_idx:batch_idx + self.batch_size]]
-                acts = buffer_acts[ind[batch_idx:batch_idx + self.batch_size]]
-                advs = buffer_advs[ind[batch_idx:batch_idx + self.batch_size]]
-                rets = buffer_rets[ind[batch_idx:batch_idx + self.batch_size]]
-                prbs = buffer_prbs[ind[batch_idx:batch_idx + self.batch_size]]
+                observations = buffer_obss[ind[batch_idx:batch_idx + self.batch_size]]
+                actions = buffer_acts[ind[batch_idx:batch_idx + self.batch_size]]
+                advantages = buffer_advs[ind[batch_idx:batch_idx + self.batch_size]]
+                returns = buffer_rets[ind[batch_idx:batch_idx + self.batch_size]]
+                probabilities = buffer_prbs[ind[batch_idx:batch_idx + self.batch_size]]
                 
                 # Normalise Advantages
-                advs = (advs - advs.mean()) / (advs.std() + 1e-8)
+                advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
                 
                 # Cast Constant Inputs to Tensors
-                acts = tf.constant(acts, tf.float32)
-                advs = tf.constant(advs, tf.float32)
-                rets = tf.constant(rets, tf.float32)
-                prbs = tf.constant(prbs, tf.float32)
+                actions = tf.constant(actions, tf.float32)
+                advantages = tf.constant(advantages, tf.float32)
+                returns = tf.constant(returns, tf.float32)
+                probabilities = tf.constant(probabilities, tf.float32)
                 
                 with tf.GradientTape() as tape:
 
                     # Run Forward Passes on Models & Get New Log Probs
-                    a_pred, v_pred = self.policy(obss, training = True)
-                    new_log_probs = self.policy.logp(a_pred, acts)
+                    a_pred, v_pred = self.policy(observations, training = True)
+                    new_log_probs = self.policy.logp(a_pred, actions)
 
                     # Calculate Ratio Between Old & New Policy
-                    ratios = tf.exp(new_log_probs - prbs)
+                    # r(theta)
+                    ratios = tf.exp(new_log_probs - probabilities)
 
                     # Clipped Actor Loss
-                    loss1 = advs * ratios
-                    loss2 = advs * tf.clip_by_value(ratios, 1 - self.PPO_EPSILON, 1 + self.PPO_EPSILON)
+                    #  Loss1 = Normal Policy Gradient Objective
+                    loss1 = advantages * ratios
+
+                    #  Loss2 = Clipped Version of Normal Policy Gradients Objective
+                    #  PPO_EPSILON generally kept as 0.2
+                    loss2 = advantages * tf.clip_by_value(ratios, 1 - self.PPO_EPSILON, 1 + self.PPO_EPSILON)
+                    
+                    #  Main clipped surrogate objective function of PPO
                     a_loss = tf.reduce_mean(-tf.math.minimum(loss1, loss2))
 
-                    # Entropy Loss
+                    # Entropy Loss - an entropy bonus to ensure sufficient exploration
                     entropy = self.policy.entropy()
                     e_loss = -tf.reduce_mean(entropy)
 
-                    # Value Loss
-                    c_loss = self.val_loss(rets, v_pred)
+                    # Value Loss - squared error loss of returns and v_pred
+                    c_loss = self.val_loss(returns, v_pred)
 
+                    # Final objective function
                     tot_loss = 0.5 * c_loss + a_loss + self.ENTROPY * e_loss
                 
                 # Compute KL Divergence for Early Stopping Before Backprop
-                kl_div = 0.5 * tf.reduce_mean(tf.square(new_log_probs - prbs))
+                kl_div = 0.5 * tf.reduce_mean(tf.square(new_log_probs - probabilities))
 
                 if self.TARGET_KL != None and kl_div > self.TARGET_KL:
                     logging.info(f"Early stopping at epoch {epoch+1} due to reaching max kl: {kl_div:.3f}")
@@ -381,7 +368,9 @@ class PolicyModel(Model):
         self.actor_network.add(Dense(opt.num_actions, activation='tanh'))
         self.critic_network.add(Dense(1))
         
+        #  Build the actor network
         self.actor_network.build(feature_output_dim)
+        #  Build the critic network
         self.critic_network.build(feature_output_dim)
 
     def call(self, inputs):
@@ -391,13 +380,13 @@ class PolicyModel(Model):
         value_output = self.critic_network(feats)
         return action_output, tf.squeeze(value_output)
             
-    def act(self, obss):
+    def act(self, observations):
         """Get Actions, Values & Log Probs During Experience Collection"""
         
-        obss = np.expand_dims(obss, axis=0)
+        observations = np.expand_dims(observations, axis=0)
         
         # Run Forward Passes
-        feats = self.feature_extractor(obss)
+        feats = self.feature_extractor(observations)
         a_pred = self.actor_network(feats)
         v_pred = self.critic_network(feats)
         
