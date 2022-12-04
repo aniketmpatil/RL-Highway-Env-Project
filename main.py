@@ -1,6 +1,7 @@
 from gym.wrappers.monitoring import video_recorder
 import yaml, os, argparse
 import numpy as np
+import tensorflow
 import tensorflow.keras as keras
 
 ## Import Environment
