@@ -43,37 +43,37 @@ FC_WIDTH = 256
 class DDPGAgent():
     """Deep Deterministic Policy Gradient Agent"""
 
-    def __init__(self, opt=None):
+    def __init__(self, params):
 
         # Configs & Hyperparameters
         self.name = "{}_{}Actions".format(
-            opt.agent, opt.arch)
-        self.num_actions = NUM_ACTIONS        
-        self.obs_dim = OBS_DIM
-        self.epochs = NUM_EPOCHS
-        self.batch_size = BATCH_SIZE        
+            params['agent'], params['arch'])
+        self.num_actions = params['num_actions']        
+        self.obs_dim = tuple(params['obs_dim'])
+        self.epochs = params['num_epochs']
+        self.batch_size = params['batch_size']      
         self.memory_size = 12 * self.batch_size
-        self.target_steps = 200 * NUM_EPISODES
+        self.target_steps = 200 * params['num_episodes']
         self.feature_extractor = get_model(self.obs_dim)
 
         # Replay Buffer
         self.memory = MemoryBuffer(self.memory_size)
 
         # DDPG Hyperparameters; Actor LR should be lower than Critic LR to enable learning
-        self.gamma = DDPG_GAMMA
-        self.tau = DDPG_TAU
-        self.actor_lr = DDPG_ACTOR_LR
-        self.critic_lr = DDPG_CRITIC_LR
+        self.gamma = params['ddpg_gamma']
+        self.tau = params['ddpg_tau']
+        self.actor_lr = params['ddpg_actor_lr']
+        self.critic_lr = params['ddpg_critic_lr']
         self.noise = 0.1                        # Gaussian Noise for explore-exploit
         # self.noise = OUNoise(env.action_space)  # OU Noise
         self.critic_loss_list = []
         self.actor_loss_list = []
 
         # Networks; Actor, Critic, & Target networks
-        self.actor = Actor(opt, name='actor')
-        self.critic = Critic(opt, name='critic')
-        self.actor_target = Actor(opt, name='actor_target')
-        self.critic_target = Critic(opt, name='critic_target')
+        self.actor = Actor(params, name='actor')
+        self.critic = Critic(params, name='critic')
+        self.actor_target = Actor(params, name='actor_target')
+        self.critic_target = Critic(params, name='critic_target')
 
         # Actor and Critic Learning Rate Decay
         actor_lr_schedule = PolynomialDecay(
@@ -82,9 +82,9 @@ class DDPGAgent():
             self.critic_lr, self.target_steps, end_learning_rate=0)
         # Actor and Critic Network Optimizer
         self.actor_optimizer = Adam(
-            learning_rate=actor_lr_schedule if opt.lr_decay else self.actor_lr)
+            learning_rate=actor_lr_schedule if params['lr_decay'] else self.actor_lr)
         self.critic_optimizer = Adam(
-            learning_rate=critic_lr_schedule if opt.lr_decay else self.critic_lr)
+            learning_rate=critic_lr_schedule if params['lr_decay'] else self.critic_lr)
 
         # Compile and Optimize
         self.actor.compile(optimizer=self.actor_optimizer)
@@ -97,7 +97,7 @@ class DDPGAgent():
 
         # Manage Logging Properties
         time = '{0:%Y-%m-%d_%H-%M-%S}'.format(datetime.datetime.now())
-        self.logdir = f"{opt.exp_dir}/log_{time}"
+        self.logdir = f"{params['exp_dir']}/log_{time}"
         os.mkdir(self.logdir)
 
         # Python Logging Gives Easier-to-read Outputs
@@ -118,9 +118,9 @@ class DDPGAgent():
                 file.write('  %s: %s\n' % (str(k), str(v)))
 
         # Load Last Model if Resume is Specified
-        if opt.resume:
+        if params['resume']:
             weights2load = keras.models.load_model(
-                f'{opt.exp_dir}/last_best.model').get_weights()
+                f'{params['exp_dir']}/last_best.model').get_weights()
             self.policy.set_weights(weights2load)
             logging.info("Loaded Weights from Last Best Model!")
 
@@ -281,13 +281,13 @@ class DDPGAgent():
         self.update_network_params()
 
 
-    def learn(self, env, opt):
+    def learn(self, env, params):
         """Run Training Sequence"""
         best_avg = 0
         score_record = []
         # Training Model
         test_model = False
-        for ep in range(opt.num_episodes):
+        for ep in range(params['num_episodes']):
             obs = env.reset()
             done = False
             score = 0
@@ -428,15 +428,15 @@ class MemoryBuffer():
 class Critic(Model):
     """Critic Network. Takes Action And Observation as Inputs and Returns Q Value"""
 
-    def __init__(self, opt, name='critic'):
+    def __init__(self, params, name='critic'):
         super(Critic, self).__init__()
         # Layer Dimensions
-        self.fc1_dims = FC_WIDTH
-        self.fc2_dims = FC_WIDTH
+        self.fc1_dims = params['fc_width']
+        self.fc2_dims = params['fc_width']
 
         self.model_name = name
         # Location to Load/Save model
-        self.checkpoint_dir = opt.load_model if opt.mode == "test" else "tmp/ddpg"
+        self.checkpoint_dir = params['load_model'] if opt.mode == "test" else "tmp/ddpg"
         # Training Model Save
         self.checkpoint_file_train = os.path.join(
             self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
@@ -464,16 +464,16 @@ class Critic(Model):
 class Actor(Model):
     """Actor Network. Takes Observation as Inputs and Returns Action"""
 
-    def __init__(self, opt, name='actor'):
+    def __init__(self, params, name='actor'):
         super(Actor, self).__init__()
         # Layer Dimensions
-        self.fc1_dims = FC_WIDTH
-        self.fc2_dims = FC_WIDTH
+        self.fc1_dims = params['fc_width']
+        self.fc2_dims = params['fc_width']
         self.n_actions = self.num_actions
 
         self.model_name = name
         # Location to Load/Save model
-        self.checkpoint_dir = opt.load_model if opt.mode == "test" else "tmp/ddpg"
+        self.checkpoint_dir = params['load_model'] if opt.mode == "test" else "tmp/ddpg"
         # Train Model Save
         self.checkpoint_file_train = os.path.join(
             self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
