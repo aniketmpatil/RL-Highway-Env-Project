@@ -12,15 +12,6 @@ import numpy as np
 import datetime
 import logging
 
-# def Identity(obs_shape):
-#     model = Sequential()
-#     model.add(Permute((3,2,1), input_shape=obs_shape))
-#     model.add(Flatten())
-#     return model
-# model_factory = {"Identity":Identity}
-# def get_model(params):
-#     return model_factory[params['arch']](params['obs_dim'])
-
 class PPO():
     """Proximal Policy Optimisation Agent with Clipping"""
     def __init__(self, params):
@@ -86,7 +77,6 @@ class PPO():
                 self.policy.set_weights(weights2load)
                 logging.info("Loaded Weights from Last Best Model!")
 
-    
     def write_log(self, step, **logs):
         """Write Episode Information to CSV File"""
         line = [step] + [round(value, 3) for value in logs.values()]
@@ -123,7 +113,7 @@ class PPO():
         while self.total_steps < self.target_steps:
             self.collect_rollout(env, params)
             self.train()
-        self.policy.save(f'{params.exp_dir}/model_last.model')
+        self.policy.save(f'{self.exp_dir}/model_last.model')
     
     def reset_memory(self):
         """Reset Agent Replay Memory Buffer"""
@@ -154,7 +144,6 @@ class PPO():
         num_steps = 0
         self.episode_counter = 0
         self.last_obs = env.reset()
-
         while num_steps != self.memory_size - 1:
             steps, done = 0, False
             last_ep_start = True
@@ -199,12 +188,12 @@ class PPO():
                        reward_max=max_reward, eval_reward=self.eval_reward, avg_ep_len=self.avg_ep_len)
 
         # Save Model if Average Reward is Greater than a Minimum & Better than Before
-        if average_reward >= np.max([params['min_reward'], self.best]) and params.save_model:
+        if average_reward >= np.max([params['min_reward'], self.best]) and params['save_model']:
             self.best = average_reward
             self.policy.save(f'{self.exp_dir}/R{average_reward:.0f}.model')
         
         # Save Model if Eval Reward is Greater than a Minimum & Better than Before
-        if self.eval_reward >= np.max([params['min_reward'], self.eval_best]) and params.save_model:
+        if self.eval_reward >= np.max([params['min_reward'], self.eval_best]) and params['save_model']:
             self.eval_best = self.eval_reward
             self.policy.save(f'{self.exp_dir}/eval_R{self.eval_reward:.0f}.model')
         
@@ -347,7 +336,7 @@ class PolicyModel(Model):
         """Pass Model Parameters from params & Initialise Learnable Log Std Param"""
         super().__init__('PolicyModel')
         self.build_model(params)
-        self.obs_dim = params['obs_dim']
+        self.obs_dim = tuple(params['obs_dim'])
         self.log_std = tf.Variable(initial_value=-0.5*np.ones(params['num_actions'], dtype=np.float32))
         
     def Identity(self, obs_shape):
@@ -359,8 +348,11 @@ class PolicyModel(Model):
     def build_model(self, params):
         """Build Model Layers & Architecture"""
         
-        self.feature_extractor = PolicyModel.Identity(self,params['obs_dim'])
-        
+        # self.feature_extractor = PolicyModel.Identity(self,params['obs_dim'])
+        self.feature_extractor = Sequential()
+        self.feature_extractor.add(Permute((3,2,1), input_shape=tuple(params['obs_dim'])))
+        self.feature_extractor.add(Flatten())
+
         # Retrieve Post-Feature Extractor Dimensions
         for layer in self.feature_extractor.layers:
             feature_output_dim = layer.output_shape
@@ -397,7 +389,7 @@ class PolicyModel(Model):
         feats = self.feature_extractor(observations)
         a_pred = self.actor_network(feats)
         v_pred = self.critic_network(feats)
-        
+    
         # Calcualte Log Probabilities
         std = tf.exp(self.log_std)
         action = a_pred + tf.random.normal(tf.shape(a_pred)) * std
