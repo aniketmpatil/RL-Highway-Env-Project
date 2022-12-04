@@ -1,5 +1,5 @@
 # IMPORTS
-from .models import get_model
+# from .models import get_model
 import logging
 import datetime
 import csv
@@ -16,7 +16,7 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import layers
 from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Dense, Input
+from tensorflow.keras.layers import Dense, Input, Permute, Flatten
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
 from tensorflow.keras.initializers import Orthogonal
@@ -39,6 +39,12 @@ DDPG_BEST = False
 FC_WIDTH = 256
 ###############################
 
+def get_model(obs_shape):
+        model = Sequential()
+        model.add(Permute((3,2,1), input_shape=obs_shape))
+        model.add(Flatten())
+        
+        return model
 
 class DDPGAgent():
     """Deep Deterministic Policy Gradient Agent"""
@@ -57,7 +63,7 @@ class DDPGAgent():
         self.feature_extractor = get_model(self.obs_dim)
 
         # Replay Buffer
-        self.memory = MemoryBuffer(self.memory_size)
+        self.memory = MemoryBuffer(params, self.memory_size)
 
         # DDPG Hyperparameters; Actor LR should be lower than Critic LR to enable learning
         self.gamma = params['ddpg_gamma']
@@ -111,26 +117,19 @@ class DDPGAgent():
                             'Highest Reward', 'Lowest Reward', 'Avg Critic Loss',
                             'Avg Actor Loss'])
 
-        with open(self.logdir + '/opt.txt', 'w+', newline='') as file:
-            args = dict((name, getattr(opt, name))
-                        for name in dir(opt) if not name.startswith('_'))
-            for k, v in sorted(args.items()):
-                file.write('  %s: %s\n' % (str(k), str(v)))
+        # with open(self.logdir + '/opt.txt', 'w+', newline='') as file:
+        #     args = dict((name, getattr(opt, name))
+        #                 for name in dir(opt) if not name.startswith('_'))
+        #     for k, v in sorted(args.items()):
+        #         file.write('  %s: %s\n' % (str(k), str(v)))
 
         # Load Last Model if Resume is Specified
         if params['resume']:
             weights2load = keras.models.load_model(
-                f'{params['exp_dir']}/last_best.model').get_weights()
+                f"{params['exp_dir']}/last_best.model").get_weights()
             self.policy.set_weights(weights2load)
             logging.info("Loaded Weights from Last Best Model!")
 
-
-    def get_model(self, obs_shape):
-        model = Sequential()
-        model.add(Permute((3,2,1), input_shape=obs_shape))
-        model.add(Flatten())
-        
-        return model
     
     def write_log(self, ep, **logs):
         """Write Episode Information to CSV File"""
@@ -236,20 +235,24 @@ class DDPGAgent():
 
     def train(self):
         """Train Network"""
-        if self.memory.mem_counter < self.batch_size:
+        if self.memory.size() < self.batch_size:
             return
 
-        state, action, reward, next_state, done = self.memory.sample_buffer(
+        state, action, reward, next_state, done = self.memory.sample_batch(
             self.batch_size)
 
         states = tf.convert_to_tensor(state, dtype=tf.float32)
+        # print("States shape is:", tf.shape(states))
         actions = tf.convert_to_tensor(action, dtype=tf.float32)
+        # print("Actions shape is:", tf.shape(actions))
         rewards = tf.convert_to_tensor(reward, dtype=tf.float32)
         next_states = tf.convert_to_tensor(next_state, dtype=tf.float32)
+        # print("Next states shape is:", tf.shape(next_states))
 
         # Critic Loss
         with tf.GradientTape() as tape:
             target_actions = self.actor_target(next_states)
+            # print("Target actions shape is:", tf.shape(target_actions))
             critic_value_ = tf.squeeze(
                 self.critic_target(next_states, target_actions), 1)
             critic_value = tf.squeeze(
@@ -385,13 +388,14 @@ class DDPGAgent():
 #         return state_batch, action_batch, reward_batch, next_state_batch, done_batch
 
 class MemoryBuffer():
-    def __init__(self, buffer_size):
+    def __init__(self, params, buffer_size):
         self.buffer_size = buffer_size
         self.count = 0
         self.buffer = deque()
-        self.feature_extractor = get_model(self.obs_dim)
+        self.feature_extractor = get_model(params['obs_dim'])
 
     def add(self, s, a, r, t, s2):
+        s = self.feature_extractor(s)[0]
         t = self.feature_extractor(t)[0]
         experience = (s, a, r, t, s2)
         if self.count < self.buffer_size: 
@@ -436,7 +440,7 @@ class Critic(Model):
 
         self.model_name = name
         # Location to Load/Save model
-        self.checkpoint_dir = params['load_model'] if opt.mode == "test" else "tmp/ddpg"
+        self.checkpoint_dir = "tmp/ddpg"
         # Training Model Save
         self.checkpoint_file_train = os.path.join(
             self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
@@ -452,7 +456,8 @@ class Critic(Model):
 
     def call(self, state, action):
         """Run Forward Pass on Critic Network"""
-        x = self.fc1(tf.concat([state, action], axis=1))
+        concat = tf.concat([state, action], axis=1)
+        x = self.fc1(concat)
         x = self.fc2(x)
 
         # Get Q-Value from evaluating action and observation
@@ -469,11 +474,11 @@ class Actor(Model):
         # Layer Dimensions
         self.fc1_dims = params['fc_width']
         self.fc2_dims = params['fc_width']
-        self.n_actions = self.num_actions
+        self.n_actions = params['num_actions']
 
         self.model_name = name
         # Location to Load/Save model
-        self.checkpoint_dir = params['load_model'] if opt.mode == "test" else "tmp/ddpg"
+        self.checkpoint_dir = "tmp/ddpg"
         # Train Model Save
         self.checkpoint_file_train = os.path.join(
             self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
