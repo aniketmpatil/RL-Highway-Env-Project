@@ -5,15 +5,15 @@ train: True                 # Mode: Train or Test
 resume: False               # Whether to Load Last Model for Further Training
 save_model: True            
 save_video: False
-load_model: None            # Model to load for Testing
-log_dir: None
+load_model: ""              # Model to load for Testing
+log_dir: ""
 ##############################
 
 ##### TRAINING PARAMETERS ######
 num_episodes: 5000          # DEFAULT: 10000          
 batch_size: 256             # DEFAULT: 64
 num_epochs: 10              # DEFAULT: 10
-lr: 5e-4                    # DEFAULT: 5e-4
+lr: 0.0005                  # DEFAULT: 0.0005
 lr_decay: True              # DEFAULT: False
 
 log_freq: 20                # DEFAULT: 20
@@ -35,7 +35,7 @@ random_obstacles: 0         # DEFAULT: 0, Number of Static Obstacles to Spawn (U
 gae_lambda: 0.95
 gae_gamma: 0.9
 ppo_epsilon: 0.2
-target_kl: None
+target_kl: ""
 ppo_memory_size: 2048
 ################################
 
@@ -49,9 +49,9 @@ ddpg_best: True
 
 ####### A3C PARAMETERS ########
 a3c_gamma: 0.99             # DEFAULT: 0.99, Generalised Advantage Estimate Gamma
-rmsprop_epsilon: 1e-5       # DEFAULT: 1e-5
+rmsprop_epsilon: 0.00001    # DEFAULT: 0.00001
 update_global_freq: 500     # DEFAULT: 5
-num_workers: None           # DEFAULT: None
+num_workers: -1             # DEFAULT: -1
 actor_coeff: 1.0            # DEFAULT: 1.0
 critic_coeff: 0.5           # DEFAULT: 0.5
 entropy_coeff: 0.01         # DEFAULT:0.01
