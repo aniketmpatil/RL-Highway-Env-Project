@@ -433,7 +433,7 @@ class Critic(Model):
 
         self.model_name = name
         # Location to Load/Save model
-        self.checkpoint_dir = "tmp/ddpg"
+        self.checkpoint_dir = "models"
         # Training Model Save
         self.checkpoint_file_train = os.path.join(
             self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
@@ -471,7 +471,7 @@ class Actor(Model):
 
         self.model_name = name
         # Location to Load/Save model
-        self.checkpoint_dir = "tmp/ddpg"
+        self.checkpoint_dir = "models"
         # Train Model Save
         self.checkpoint_file_train = os.path.join(
             self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
