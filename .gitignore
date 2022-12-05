@@ -1,6 +1,7 @@
 rl_venv
 logs
 tmp
+train.sh
 
 **/__pycache__
 *.zip
