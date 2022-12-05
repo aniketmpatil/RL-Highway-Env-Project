@@ -1,14 +1,13 @@
 # IMPORTS
-# from .models import get_model
 import logging
 import datetime
 import csv
 import sys
 import gym
 import os
-from abc import ABC, abstractmethod
+# from abc import ABC, abstractmethod
 import numpy as np
-import pprint
+# import pprint
 import random
 from collections import deque
 
@@ -19,32 +18,17 @@ from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import Dense, Input, Permute, Flatten
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
-from tensorflow.keras.initializers import Orthogonal
+# from tensorflow.keras.initializers import Orthogonal
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-
-#DDPG specific hyperparameters
-###############################
-NUM_ACTIONS = 1
-OBS_DIM = (2, 18, 18)
-NUM_EPOCHS = 10
-BATCH_SIZE = 64
-NUM_EPISODES = 100000
-DDPG_GAMMA = 0.99
-DDPG_TAU = 0.005
-DDPG_ACTOR_LR = 0.001
-DDPG_CRITIC_LR = 0.002
-DDPG_BEST = False
-FC_WIDTH = 256
-###############################
-
 def get_model(obs_shape):
-        model = Sequential()
-        model.add(Permute((3,2,1), input_shape=obs_shape))
-        model.add(Flatten())
-        
-        return model
+    """Identity architecture"""
+    model = Sequential()
+    model.add(Permute((3,2,1), input_shape=obs_shape))
+    model.add(Flatten())
+    
+    return model
 
 class DDPGAgent():
     """Deep Deterministic Policy Gradient Agent"""
@@ -52,8 +36,7 @@ class DDPGAgent():
     def __init__(self, params):
 
         # Configs & Hyperparameters
-        self.name = "{}_{}Actions".format(
-            params['agent'], params['arch'])
+        self.name = "{}_{}Actions".format(params['agent'], params['arch'])
         self.num_actions = params['num_actions']        
         self.obs_dim = tuple(params['obs_dim'])
         self.epochs = params['num_epochs']
@@ -82,15 +65,11 @@ class DDPGAgent():
         self.critic_target = Critic(params, name='critic_target')
 
         # Actor and Critic Learning Rate Decay
-        actor_lr_schedule = PolynomialDecay(
-            self.actor_lr, self.target_steps, end_learning_rate=0)
-        critic_lr_schedule = PolynomialDecay(
-            self.critic_lr, self.target_steps, end_learning_rate=0)
+        actor_lr_schedule = PolynomialDecay(self.actor_lr, self.target_steps, end_learning_rate=0)
+        critic_lr_schedule = PolynomialDecay(self.critic_lr, self.target_steps, end_learning_rate=0)
         # Actor and Critic Network Optimizer
-        self.actor_optimizer = Adam(
-            learning_rate=actor_lr_schedule if params['lr_decay'] else self.actor_lr)
-        self.critic_optimizer = Adam(
-            learning_rate=critic_lr_schedule if params['lr_decay'] else self.critic_lr)
+        self.actor_optimizer = Adam(learning_rate=actor_lr_schedule if params['lr_decay'] else self.actor_lr)
+        self.critic_optimizer = Adam(learning_rate=critic_lr_schedule if params['lr_decay'] else self.critic_lr)
 
         # Compile and Optimize
         self.actor.compile(optimizer=self.actor_optimizer)
@@ -116,12 +95,6 @@ class DDPGAgent():
             write.writerow(['Episode', 'Ep Reward', 'Avg Reward', 'Best Avg',
                             'Highest Reward', 'Lowest Reward', 'Avg Critic Loss',
                             'Avg Actor Loss'])
-
-        # with open(self.logdir + '/opt.txt', 'w+', newline='') as file:
-        #     args = dict((name, getattr(opt, name))
-        #                 for name in dir(opt) if not name.startswith('_'))
-        #     for k, v in sorted(args.items()):
-        #         file.write('  %s: %s\n' % (str(k), str(v)))
 
         # Load Last Model if Resume is Specified
         if params['resume']:
@@ -249,7 +222,6 @@ class DDPGAgent():
         # Critic Loss
         with tf.GradientTape() as tape:
             target_actions = self.actor_target(next_states)
-            # print("Target actions shape is:", tf.shape(target_actions))
             critic_value_ = tf.squeeze(self.critic_target(next_states, target_actions), 1)
             critic_value = tf.squeeze(self.critic(states, actions), 1)
             target = reward + self.gamma*critic_value_*(1-done)
@@ -332,62 +304,19 @@ class DDPGAgent():
                   score, "Average score: %.1f" % avg_score)
 
 
-# class MemoryBuffer:
-#     """Store Experiences For Agent To Sample and Learn From"""
-
-#     def __init__(self, max_size, input_shape, n_actions):
-
-#         self.mem_size = max_size
-#         self.mem_counter = 0
-#         # self.state_memory = np.zeros((self.mem_size, *input_shape))
-#         self.state_memory = np.zeros(
-#             (self.mem_size, * (np.prod(input_shape),)))
-#         self.next_state_memory = np.zeros(
-#             (self.mem_size, * (np.prod(input_shape),)))
-#         self.action_memory = np.zeros((self.mem_size, n_actions))
-#         self.reward_memory = np.zeros(self.mem_size)
-#         self.terminal_memory = np.zeros(self.mem_size, dtype=bool)
-#         self.feature_extractor = get_model(self.obs_dim)
-
-
-#     def push(self, state, action, reward, next_state, done):
-#         """Push New Experiences Into Buffer And Increment Counter"""
-#         index = self.mem_counter % self.mem_size
-#         state = self.feature_extractor(state)[0]
-#         next_state = self.feature_extractor(next_state)[0]
-
-#         self.state_memory[index] = state
-#         self.next_state_memory[index] = next_state
-#         self.action_memory[index] = action
-#         self.reward_memory[index] = reward
-#         self.terminal_memory[index] = done
-
-#         self.mem_counter += 1
-
-
-#     def sample_buffer(self, batch_size):
-#         """Randomly Sample from Memory Buffer According To Batch Size"""
-#         max_mem = min(self.mem_counter, self.mem_size)
-
-#         # 'False' to prevent repetition in sampling
-#         batch = np.random.choice(max_mem, batch_size, replace=False)
-
-#         state_batch = self.state_memory[batch]
-#         next_state_batch = self.next_state_memory[batch]
-#         action_batch = self.action_memory[batch]
-#         reward_batch = self.reward_memory[batch]
-#         done_batch = self.terminal_memory[batch]
-
-#         return state_batch, action_batch, reward_batch, next_state_batch, done_batch
-
 class MemoryBuffer():
+    """Store Experiences For Agent To Sample and Learn From"""
+
     def __init__(self, params, buffer_size):
+
         self.buffer_size = buffer_size
         self.count = 0
         self.buffer = deque()
         self.feature_extractor = get_model(params['obs_dim'])
 
+
     def add(self, s, a, r, t, s2):
+        """Push New Experiences Into Buffer And Increment Counter"""
         s = self.feature_extractor(s)[0]
         t = self.feature_extractor(t)[0]
         experience = (s, a, r, t, s2)
@@ -398,10 +327,13 @@ class MemoryBuffer():
             self.buffer.popleft()
             self.buffer.append(experience)
 
+
     def size(self):
         return self.count
 
+
     def sample_batch(self, batch_size):
+        """Randomly Sample from Memory Buffer According To Batch Size"""
         batch = []
 
         if self.count < batch_size:
@@ -416,6 +348,7 @@ class MemoryBuffer():
         s2_batch = np.array([_[4] for _ in batch])
 
         return s_batch, a_batch, r_batch, t_batch, s2_batch
+
 
     def clear(self):
         self.buffer.clear()
@@ -435,11 +368,9 @@ class Critic(Model):
         # Location to Load/Save model
         self.checkpoint_dir = "models"
         # Training Model Save
-        self.checkpoint_file_train = os.path.join(
-            self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
+        self.checkpoint_file_train = os.path.join(self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
         # Best Model Save
-        self.checkpoint_file_best = os.path.join(
-            self.checkpoint_dir, self.model_name+'_ddpg_best.h5')
+        self.checkpoint_file_best = os.path.join(self.checkpoint_dir, self.model_name+'_ddpg_best.h5')
 
         # Build Critic Layers
         self.fc1 = Dense(self.fc1_dims, activation='relu')
