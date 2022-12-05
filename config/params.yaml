@@ -1,11 +1,11 @@
 ##### GENERAL PARAMETERS #####
 exp_id: "train_ppo"         # Name for log files and checkpoints
 agent: "AgentPPO"                # Agent: "PPO", "DDPG", "A3C"
-train: True                 # Mode: Train or Test
+train: False                 # Mode: Train or Test
 resume: False               # Whether to Load Last Model for Further Training
 save_model: True            
-save_video: False
-load_model: ""              # Model to load for Testing
+save_video: True
+load_model: "model/5000_Episode_checkpoint_901120_SV3.model"              # Model to load for Testing
 log_dir: ""
 ##############################
 

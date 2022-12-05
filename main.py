@@ -1,4 +1,5 @@
 from gym.wrappers.monitoring import video_recorder
+from gym.wrappers import Monitor
 import yaml, os, argparse
 import numpy as np
 import tensorflow
@@ -19,7 +20,7 @@ class opts(object):
         self.parser.add_argument('--obs_dim', default=(2,18,18), type=int, nargs=3, help='Agent Observation Space')
         self.parser.add_argument('--num_actions', default=1, type=int, help='Agent Action Space')
         self.parser.add_argument('--all_random', action='store_true', help='Whether to Train on All Random Vehicles')
-        self.parser.add_argument('--spawn_vehicles', default=0, type=int, help='Number of Non-Agent Vehicles to Spawn, Set 0 to Disable')
+        self.parser.add_argument('--spawn_vehicles', default=3, type=int, help='Number of Non-Agent Vehicles to Spawn, Set 0 to Disable')
         self.parser.add_argument('--random_lane', action='store_true', help='Whether to Randomize Agent Spawn Lane')
         self.parser.add_argument('--offroad_thres', default=-1, type=int, help='Number of Steps Agent is Allowed to Ride Offroad')
         
@@ -57,8 +58,8 @@ if __name__ == "__main__":
     env = RaceTrackEnv(opt)
     if params['save_video']:
         load_model = params['load_model']
-        # env = Monitor(env, f'./videos/{agent_name}{load_model[-7]}/', force=True)
-        vid = video_recorder.VideoRecorder(env=env, path=f'./videos/{agent_name}{load_model[-7]}/')
+        env = Monitor(env, f'./videos/{agent_name}{load_model[-7]}/', force=True)
+        # vid = video_recorder.VideoRecorder(env=env, path=f'./videos/{agent_name}{load_model[-7]}/')
 
     if train:
         print("---------- Training ", agent_name, "----------")
@@ -96,9 +97,9 @@ if __name__ == "__main__":
                 
         while not done:
             action = model(np.array([obs]))[0]
-            obs, reward, done, info, _ = env.step(action)
+            obs, reward, done, _ = env.step(action)
             total_reward += reward
             print(reward)
-            if params['save_video']:
-                vid.capture_frame()
+            # if params['save_video']:
+            #     env.capture_frame()
         print("Total Reward: ", total_reward)
