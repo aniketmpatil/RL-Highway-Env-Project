@@ -1,5 +1,6 @@
 rl_venv
 logs
+tmp
 
 **/__pycache__
 *.zip
