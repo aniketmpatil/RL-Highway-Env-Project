@@ -242,30 +242,23 @@ class DDPGAgent():
             self.batch_size)
 
         states = tf.convert_to_tensor(state, dtype=tf.float32)
-        # print("States shape is:", tf.shape(states))
         actions = tf.convert_to_tensor(action, dtype=tf.float32)
-        # print("Actions shape is:", tf.shape(actions))
         rewards = tf.convert_to_tensor(reward, dtype=tf.float32)
         next_states = tf.convert_to_tensor(next_state, dtype=tf.float32)
-        # print("Next states shape is:", tf.shape(next_states))
 
         # Critic Loss
         with tf.GradientTape() as tape:
             target_actions = self.actor_target(next_states)
             # print("Target actions shape is:", tf.shape(target_actions))
-            critic_value_ = tf.squeeze(
-                self.critic_target(next_states, target_actions), 1)
-            critic_value = tf.squeeze(
-                self.critic(states, actions), 1)
+            critic_value_ = tf.squeeze(self.critic_target(next_states, target_actions), 1)
+            critic_value = tf.squeeze(self.critic(states, actions), 1)
             target = reward + self.gamma*critic_value_*(1-done)
-            critic_loss = keras.losses.MSE(
-                target, critic_value)    # MSE as Critic Criterion
+            critic_loss = keras.losses.MSE(target, critic_value)    # MSE as Critic Criterion
             self.critic_loss_list.append(critic_loss.numpy())
+        
         # Critic Compute Gradients and Apply To Model
-        critic_network_gradient = tape.gradient(
-            critic_loss, self.critic.trainable_variables)
-        self.critic.optimizer.apply_gradients(
-            zip(critic_network_gradient, self.critic.trainable_variables))
+        critic_network_gradient = tape.gradient(critic_loss, self.critic.trainable_variables)
+        self.critic.optimizer.apply_gradients(zip(critic_network_gradient, self.critic.trainable_variables))
 
         # Actor Loss
         with tf.GradientTape() as tape:
