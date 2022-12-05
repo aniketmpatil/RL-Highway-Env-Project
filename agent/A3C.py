@@ -1,6 +1,10 @@
 import numpy as np
 import logging, datetime, os
 import sys, csv
+from multiprocessing import cpu_count
+import threading
+from threading import Thread
+
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tensorflow.keras.models import Model, Sequential
@@ -8,13 +12,12 @@ from tensorflow.keras.layers import Dense, Flatten, Permute
 from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
 
-from multiprocessing import cpu_count
-import threading
-from threading import Thread
-
 from racetrack_env import RaceTrackEnv
 
 class ActorCritic(Model):
+    '''
+        Creates Actor-Critic Networks
+    '''
     def __init__(self, params):
         super().__init__('ActorCriticModel')
         self.num_actions = params['num_actions']
@@ -24,31 +27,40 @@ class ActorCritic(Model):
         self.create_model()
 
     def create_model(self):
-        self.feature_extractor = Sequential() ### LINEAR MODEL
+        '''
+            Create Linear Model with a Feature Extractor which is used by 3 networks: Actor Network, 
+            Critic Network and Variance Network (used for sampling random actions)
+        '''
+        self.feature_extractor = Sequential()
         self.feature_extractor.add(Permute((3,2,1), input_shape=self.obs_dim))
         self.feature_extractor.add(Flatten())
 
         # Take output feature dimensions
         feature_output_dim = self.feature_extractor.layers[-1].output_shape
 
+        # Create three Sequential Networks
         self.actor_network = Sequential()
         self.var_network = Sequential()
         self.critic_network = Sequential()
 
+        # Add Fully Connected Networks
         for _ in range(self.fc_layers):
             self.actor_network.add(Dense(self.fc_width, activation='relu', kernel_initializer = 'glorot_uniform'))
             self.var_network.add(Dense(self.fc_width, activation='relu', kernel_initializer = 'glorot_uniform'))
             self.critic_network.add(Dense(self.fc_width, activation='relu', kernel_initializer = 'glorot_uniform'))
         
+        # Add Output Layers to all 3 Networks
         self.actor_network.add(Dense(self.num_actions, activation='tanh', kernel_initializer = 'glorot_uniform'))
         self.var_network.add(Dense(self.num_actions, activation='softmax', kernel_initializer = 'glorot_uniform'))
         self.critic_network.add(Dense(1, kernel_initializer = 'glorot_uniform'))
 
+        # Build the model
         self.actor_network.build(feature_output_dim)
         self.var_network.build(feature_output_dim)
         self.critic_network.build(feature_output_dim)
 
     def call(self, inputs):
+        # End-to-end Forward Pass through the networks
         feats = self.feature_extractor(inputs)
         action_output = self.actor_network(feats)
         var_output = self.var_network(feats)
@@ -56,14 +68,20 @@ class ActorCritic(Model):
         return action_output, var_output, tf.squeeze(value_output)
     
     def act(self, obs):
+        '''
+            Sample Action from the Actor Network
+        '''
         obs = np.expand_dims(obs, axis=0)
 
         feats = self.feature_extractor(obs)
         mu = self.actor_network(feats)
         var = self.var_network(feats)
 
+        # Action is sampled from a Normal Probability Distribution
         probability_density = tfp.distributions.Normal(mu, var)
         action = probability_density.sample(self.num_actions)
+
+        # Action clipped between -1 and 1
         action = tf.clip_by_value(action, -1, 1)
 
         return action.numpy()
@@ -85,7 +103,9 @@ class A3CAgent():
         for worker in workers: worker.join()
 
 class A3C_Worker(Thread):
-    
+    '''
+        A3C Worker Class for creating multiple workers to assist the training process
+    '''
     global_best = 0
     global_episode = 0
     global_total_reward = []
@@ -96,6 +116,9 @@ class A3C_Worker(Thread):
     save_lock = threading.Lock()
 
     def __init__(self, env, policy_global, worker_idx, params):
+        '''
+            Initialize the A3C Worker Class for creating multiple workers to assist the training process
+        '''
         Thread.__init__(self)
         self.env = env
         self.policy_global = policy_global
@@ -118,8 +141,10 @@ class A3C_Worker(Thread):
         self.critic_coeff  = params['critic_coeff']
         self.entropy_coeff = params['entropy_coeff']
 
+        # Initialize Local Policy Network
         self.policy_local  = ActorCritic(params)
 
+        # Initialize LR Schedule and Optimizer
         lr_schedule = PolynomialDecay(self.lr, self.num_episodes*200, end_learning_rate=0)
         self.optimizer = RMSprop(learning_rate=lr_schedule if params['lr_decay'] else self.lr, epsilon=self.rmsprop_epsilon)
 
@@ -133,10 +158,12 @@ class A3C_Worker(Thread):
         logging.basicConfig(filename=self.logdir+'/log.log', format='%(message)s', filemode='w', level = logging.DEBUG)
         logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
+        # Logging values in CSV file
         with open(self.logdir + '/log.csv', 'w+', newline ='') as file:
             write = csv.writer(file)
             write.writerow(['Total Steps', 'Avg Reward', 'Max Reward', 'Min Reward', 'Avg Actor Loss', 'Avg Critic Loss'])
             
+        # Logging Hyperparameters used for training process
         with open(self.logdir + '/opt.txt', 'w+', newline ='') as file:
             # args = dict((name, getattr(opt, name)) for name in dir(opt) if not name.startswith('_'))
             args = params
@@ -144,7 +171,9 @@ class A3C_Worker(Thread):
                 file.write('  %s: %s\n' % (str(k), str(v)))
         
     def write_log(self):
-        """Record to Log File"""
+        '''
+            Record to Log File
+        '''
         
         logging.info(40*"-")
         logging.info(f"Worker: {self.worker_idx}")
@@ -161,7 +190,9 @@ class A3C_Worker(Thread):
 
 
     def write_csv(self, step, g_mean_rews, g_max_rews, g_min_rews, g_a_loss, g_c_loss):
-        """Record to CSV File"""
+        '''
+            Record to CSV File
+        '''
 
         line = [step, g_mean_rews, g_max_rews, g_min_rews, g_a_loss, g_c_loss]
         with open(self.logdir + '/log.csv', 'a', newline ='') as file:
@@ -170,17 +201,26 @@ class A3C_Worker(Thread):
 
 
     def reset_memory(self):
+        '''
+            Reset worker memory
+        '''
         self.obss_batch = np.zeros((self.update_global_freq, *self.obs_dim))
         self.acts_batch = np.zeros((self.update_global_freq, self.num_actions))
         self.rews_batch = np.zeros(self.update_global_freq)
 
     def replay_memory(self, step, obs, action, reward):
+        '''
+            Add to worker memory for updating Global Network
+        '''
         self.obss_batch[step] = obs
         self.acts_batch[step] = action
         self.rews_batch[step] = reward
         return self.obss_batch, self.acts_batch, self.rews_batch
 
     def td_target(self, rewards, next_v, done):
+        '''
+            Calculate TD Target values
+        '''
         td_targets = np.zeros_like(rewards)
         if done: ret = 0
         else: ret = next_v
@@ -191,6 +231,9 @@ class A3C_Worker(Thread):
         return td_targets
 
     def run(self):
+        '''
+            This function runs when the actor.start() function is called on a multithreaded implementation
+        '''
         self.total_losses = []
         self.a_losses = []
         self.c_losses = []
@@ -207,6 +250,7 @@ class A3C_Worker(Thread):
                 action = self.policy_local.act(obs)
                 next_obs, reward, done, _ = self.env.step(action.reshape(self.num_actions, ))
 
+                # Take action and save interaction with the environment with 
                 obss, acts, rews = self.replay_memory(update_counter, obs, action, reward)
 
                 self.ep_reward += reward
@@ -215,15 +259,16 @@ class A3C_Worker(Thread):
                     next_obss = np.expand_dims(next_obs, axis=0)
 
                     next_v = self.policy_local.critic_network(self.policy_local.feature_extractor(next_obss), training=False).numpy()
-
+                    
+                    # Calculate TD Target values
                     td_targets = self.td_target(rews, next_v, done)
                     td_targets = np.array(td_targets)
 
                     values     = self.policy_local.critic_network(self.policy_local.feature_extractor(obss), training=False).numpy()
 
+                    # Calculate Advantage Values
                     advs       = td_targets - values
                     advs       = np.array(advs)
-
                     advs = (advs - advs.mean()) / (advs.std() + 1e-8)
 
                     acts = tf.constant(acts, tf.float32)
@@ -233,15 +278,19 @@ class A3C_Worker(Thread):
                     with tf.GradientTape() as tape:
                         mu, var, v_pred = self.policy_local(obss, training=True)
 
+                        # Calculate Actor and Critic Losses
                         a_loss = self.actor_loss(mu, var, acts, advs)
                         c_loss = self.critic_loss(v_pred, td_targets)
 
+                        # Calculate Total loss based on provided coefficients
                         total_loss = self.actor_coeff * a_loss + self.critic_coeff * c_loss
 
+                        # Compute Gradients and applu using Optimizer
                         grad = tape.gradient(total_loss, self.policy_local.trainable_variables, unconnected_gradients=tf.UnconnectedGradients.ZERO)
                         grad, _ = tf.clip_by_global_norm(grad, 0.5)
                         self.optimizer.apply_gradients(zip(grad, self.policy_global.trainable_variables))
 
+                        # Transfer weights from local policy network to global one
                         self.policy_local.set_weights(self.policy_global.get_weights())
 
                     self.total_losses.append(total_loss.numpy())
@@ -274,7 +323,7 @@ class A3C_Worker(Thread):
                 self.write_csv(A3C_Worker.global_episode, avg_global_reward, max_global_reward, min_global_reward, \
                                avg_actor_loss, avg_critic_loss)
 
-            # Save Model if Episode Reward is Greater than a Minimum & Better than Before
+            # Save Model if Episode Reward is better than before
             if self.ep_reward >= np.max([self.min_reward, A3C_Worker.global_best]) and self.save_model:
                 with A3C_Worker.save_lock:
                     logging.info(f"Saving Model! Worker: {self.worker_idx}, Episode Score: {self.ep_reward}")
@@ -289,6 +338,9 @@ class A3C_Worker(Thread):
                     self.policy_local.save(f'{self.exp_dir}/checkpoint_{global_episode}.model')
 
     def actor_loss(self, mu, var, action, adv):
+        '''
+            Function to Compute Actor Network Loss
+        '''
         probability_density_func = tfp.distributions.Normal(mu, var)
         entropy = probability_density_func.entropy()
         log_prob = probability_density_func.log_prob(action)
@@ -299,6 +351,9 @@ class A3C_Worker(Thread):
         return actor_loss
 
     def critic_loss(self, v_pred, td_targets):
+        '''
+            Function to Compute Critic Network Loss
+        '''
         mse = tf.keras.losses.MeanSquaredError()
         critic_loss = mse(td_targets, v_pred)
         

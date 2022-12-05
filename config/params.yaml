@@ -58,7 +58,6 @@ entropy_coeff: 0.01         # DEFAULT:0.01
 ################################
 
 ###### NEURAL NETWORK PARAMS ######
-arch: "Identity"            # "DoubleConv","NatureCnn","ConvLSTM","MLP","Identity"
 fc_layers: 2                # DEFAULT: 2
 fc_width: 256               # DEFAULT: 256
 ###################################
