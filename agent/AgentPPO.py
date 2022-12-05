@@ -339,16 +339,9 @@ class PolicyModel(Model):
         self.obs_dim = tuple(params['obs_dim'])
         self.log_std = tf.Variable(initial_value=-0.5*np.ones(params['num_actions'], dtype=np.float32))
         
-    def Identity(self, obs_shape):
-        model = Sequential()
-        model.add(Permute((3,2,1), input_shape=obs_shape))
-        model.add(Flatten())
-        return model
-
     def build_model(self, params):
         """Build Model Layers & Architecture"""
         
-        # self.feature_extractor = PolicyModel.Identity(self,params['obs_dim'])
         self.feature_extractor = Sequential()
         self.feature_extractor.add(Permute((3,2,1), input_shape=tuple(params['obs_dim'])))
         self.feature_extractor.add(Flatten())
