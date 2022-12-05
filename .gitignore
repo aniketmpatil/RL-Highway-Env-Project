@@ -1,4 +1,6 @@
 rl_venv
+slurm_outputs
+
 **/__pycache__
 *.zip
 *.pyc
