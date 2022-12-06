@@ -62,8 +62,8 @@ if __name__ == "__main__":
     env = RaceTrackEnv(opt)
 
     if params['save_video']:
-        load_model = params['load_model']
-        env = Monitor(env, f'./videos/{agent_name}{load_model[-7]}/', force=True)
+        exp_id = params['exp_id']
+        env = Monitor(env, f'./videos/{agent_name}_{exp_id}/', force=True)
 
     if train:
         print("---------- Training ", agent_name, "----------")

@@ -1,63 +1,61 @@
 ##### GENERAL PARAMETERS #####
 exp_id: "train_a3c"         # Name for log files and checkpoints
 agent: "A3C"                # Agent: "PPO", "DDPG", "A3C"
-train: True                 # Mode: Train or Test
+train: True                 # Mode: Train or Test, (Set False for test mode)
 resume: False               # Whether to Load Last Model for Further Training
 save_model: True            
 save_video: False
 load_model: ""              # Model to load for Testing
-log_dir: ""
 ##############################
 
 ##### TRAINING PARAMETERS ######
-num_episodes: 5000          # DEFAULT: 10000          
-batch_size: 256             # DEFAULT: 64
-num_epochs: 10              # DEFAULT: 10
-lr: 0.0005                  # DEFAULT: 0.0005
-lr_decay: True              # DEFAULT: False
+num_episodes: 5000
+batch_size: 256             # IMPORTANT: Set to 64 for DDPG Agent
+num_epochs: 10
+lr: 0.0005
+lr_decay: True
 
-log_freq: 20                # DEFAULT: 20
-eval_freq: 1000             # DEFAULT: 100
+log_freq: 20                # Frequency for logging loss values
+eval_freq: 1000             # Frequency for evaluating the network
 min_reward: 50              # DEFAULT: 50
 ################################
 
 ##### ENVIRONMENT PARAMETERS #####
-obs_dim: [2,18,18]          # DEFAULT: [2,18,18], Agent Observation Space
-num_actions: 1              # DEFAULT: 1, Agent Action Space
-all_random: False           # DEFAULT: False, Whether to Train on All Random Vehicles
-spawn_vehicles: 3           # DEFAULT: 0, Number of Non-Agent Vehicles to Spawn, Set 0 to Disable
-random_lane: False          # DEFAULT: False, Whether to Randomize Agent Spawn Lane
-offroad_thresh: -1          # DEFAULT: -1, Number of Steps Agent is Allowed to Ride Offroad
-random_obstacles: 0         # DEFAULT: 0, Number of Static Obstacles to Spawn (Unused)
+obs_dim: [2,18,18]          # Agent Observation Space Dimensions with features ['on-road', 'presence']
+num_actions: 1
+all_random: False           # Whether to Train on All Random Vehicles
+spawn_vehicles: 3           # Number of Non-Agent Vehicles to Spawn, Set 0 to Disable
+random_lane: False          # Whether to Randomize Agent Spawn Lane
+offroad_thresh: -1          # Number of Steps Agent is Allowed to Ride Offroad
 ##################################
 
 ####### PPO PARAMETERS ########
-gae_lambda: 0.95
-gae_gamma: 0.9
-ppo_epsilon: 0.2
-target_kl: ""
+gae_lambda: 0.95            # Generalized Advantage Estimate Lambda
+gae_gamma: 0.9              # Generalized Advantage Estimate Gamma
+ppo_epsilon: 0.2            # Clipping loss Epsilon
+target_kl: ""               # Max KL Divergence for training sequence
 ppo_memory_size: 2048
 ################################
 
 ####### DDPG PARAMETERS ########
-ddpg_actor_lr: 0.001
+ddpg_actor_lr: 0.001        # Important: Actor Learning Rate should always be lesser than Critic Learning Rate
 ddpg_critic_lr: 0.002
-ddpg_gamma: 0.99
-ddpg_tau: 0.005
+ddpg_gamma: 0.99            # Generalized Advantage Estimate Gamma
+ddpg_tau: 0.005             # Soft Update Coefficient
 ddpg_best: True
 ################################
 
 ####### A3C PARAMETERS ########
-a3c_gamma: 0.99             # DEFAULT: 0.99, Generalised Advantage Estimate Gamma
-rmsprop_epsilon: 0.00001    # DEFAULT: 0.00001
-update_global_freq: 500     # DEFAULT: 5
-num_workers: -1             # DEFAULT: -1
-actor_coeff: 1.0            # DEFAULT: 1.0
-critic_coeff: 0.5           # DEFAULT: 0.5
-entropy_coeff: 0.01         # DEFAULT:0.01
+a3c_gamma: 0.99             # Generalised Advantage Estimate Gamma
+rmsprop_epsilon: 0.00001
+update_global_freq: 500     # Frequency with which the global network will be updated
+num_workers: -1             # Set to -1, this will set num_workers = number of CPU cores
+actor_coeff: 1.0            # Actor loss coefficient for calculating total loss
+critic_coeff: 0.5           # Critic loss coefficient for calculating total loss
+entropy_coeff: 0.01
 ################################
 
 ###### NEURAL NETWORK PARAMS ######
-fc_layers: 2                # DEFAULT: 2
-fc_width: 256               # DEFAULT: 256
+fc_layers: 2
+fc_width: 256
 ###################################
