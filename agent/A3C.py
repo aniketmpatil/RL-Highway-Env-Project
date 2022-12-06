@@ -92,11 +92,11 @@ class A3CAgent():
         self.policy_global = ActorCritic(params)   # Initialize Global Network
         self.num_workers = cpu_count() if params['num_workers'] == -1 else params['num_workers']
 
-    def learn(self, env, opt, params):
+    def learn(self, env, params):
         workers = []
         print("Number of workers: ", self.num_workers)
         for i in range(self.num_workers):
-            env = RaceTrackEnv(opt)
+            env = RaceTrackEnv(params)
             workers.append(A3C_Worker(env, self.policy_global, i, params))
     
         for worker in workers: worker.start()    

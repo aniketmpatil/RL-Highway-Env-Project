@@ -27,7 +27,7 @@ class RaceTrackEnv(AbstractEnv):
 
     """A lane keeping control task with interaction, in a racetrack-like loop."""
 
-    def __init__(self, opt, config: dict = None) -> None:
+    def __init__(self, params, config: dict = None) -> None:
 
         # Configure Environment with Opt Parameters
         config = {
@@ -41,11 +41,11 @@ class RaceTrackEnv(AbstractEnv):
                 "as_image": False,
                 "align_to_vehicle_axes": True
                 
-            } if opt.obs_dim[0] == 2 else {
+            } if params['obs_dim'] == 2 else {
                 
                 "type": "GrayscaleObservation",
-                "observation_shape": tuple(opt.obs_dim[-2:]),
-                "stack_size": opt.obs_dim[0],
+                "observation_shape": tuple(params['obs_dim'][-2:]),
+                "stack_size": params['obs_dim'][0],
                 "weights": [0.2989, 0.5870, 0.1140],
                 "scaling": 1.75
                 
@@ -54,16 +54,16 @@ class RaceTrackEnv(AbstractEnv):
             "action": {
                 
                 "type": "ContinuousAction",
-                "longitudinal": False if opt.num_actions < 2 else True,
+                "longitudinal": False if params['num_actions'] < 2 else True,
                 "lateral": True,
                 "dynamical": False,
                 "steering_range": [-np.pi / 4, np.pi / 4]
                 
             },
 
-            "all_random": opt.all_random,
-            "spawn_vehicles": opt.spawn_vehicles,
-            "random_lane": opt.random_lane,
+            "all_random": params['all_random'],
+            "spawn_vehicles": params['spawn_vehicles'],
+            "random_lane": params['random_lane'],
 
             
             # Simulation Information
@@ -85,7 +85,7 @@ class RaceTrackEnv(AbstractEnv):
         self.agent_current = None
         self.agent_target = None
         self.offroad_counter = 0
-        self.offroad_threshold = opt.offroad_thres
+        self.offroad_threshold = params['offroad_thresh']
 
 
     @classmethod

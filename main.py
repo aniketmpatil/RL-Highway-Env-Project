@@ -11,26 +11,6 @@ from agent.A3C import A3CAgent
 from agent.DDPG import DDPGAgent
 from agent.PPO import PPO
 
-class opts(object):
-    def __init__(self):
-        self.parser = argparse.ArgumentParser()
-
-        self.parser.add_argument('--exp_id', default='default', help='Unique Experiment Name for Saving Logs & Models')
-        
-        self.parser.add_argument('--obs_dim', default=(2,18,18), type=int, nargs=3, help='Agent Observation Space')
-        self.parser.add_argument('--num_actions', default=1, type=int, help='Agent Action Space')
-        self.parser.add_argument('--all_random', action='store_true', help='Whether to Train on All Random Vehicles')
-        self.parser.add_argument('--spawn_vehicles', default=3, type=int, help='Number of Non-Agent Vehicles to Spawn, Set 0 to Disable')
-        self.parser.add_argument('--random_lane', action='store_true', help='Whether to Randomize Agent Spawn Lane')
-        self.parser.add_argument('--offroad_thres', default=-1, type=int, help='Number of Steps Agent is Allowed to Ride Offroad')
-        
-    def parse(self, args=''):
-        if args == '':
-            opt = self.parser.parse_args()
-        else:
-            opt = self.parser.parse_args(args)
-        return opt
-
 def read_config(file_path):
     '''
         Function to load Hyperparameters
@@ -50,15 +30,13 @@ def read_config(file_path):
     return data
 
 if __name__ == "__main__":
-    opt = opts().parse()
-
     params_file_path = "config/params.yaml"
     params = read_config(params_file_path)
 
     agent_name = params['agent']
     train = params['train']
 
-    env = RaceTrackEnv(opt)
+    env = RaceTrackEnv(params)
 
     if params['save_video']:
         exp_id = params['exp_id']
@@ -68,7 +46,7 @@ if __name__ == "__main__":
         print("---------- Training ", agent_name, "----------")
         if agent_name == "A3C":
             agent = A3CAgent(params)
-            agent.learn(env, opt, params)
+            agent.learn(env, params)
         elif agent_name == "PPO":
             agent = PPO(params)
             agent.learn(env, params)
