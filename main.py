@@ -1,16 +1,16 @@
-# from gym.wrappers import Monitor
-from gym.wrappers.monitoring import video_recorder
+from gym.wrappers import Monitor
 import yaml, os, argparse
 import numpy as np
 import tensorflow.keras as keras
+import matplotlib.pyplot as plt
 
 ## Import Environment
 from racetrack_env import RaceTrackEnv
 
 ## Import all agents
-# from agent.A3C import A3CAgent
-# from agent.DDPG import DDPGAgent
-# from agent.PPO import PPOAgent
+from agent.A3C import A3CAgent
+from agent.DDPG import DDPGAgent
+from agent.PPO import PPOAgent
 
 class opts(object):
     def __init__(self):
@@ -63,8 +63,7 @@ if __name__ == "__main__":
 
     if params['save_video']:
         load_model = params['load_model']
-        # env = Monitor(env, f'./videos/{agent_name}{load_model[-7]}/', force=True)
-        vid = video_recorder.VideoRecorder(env=env, path=f'./videos/{agent_name}{load_model[-7]}/')
+        env = Monitor(env, f'./videos/{agent_name}{load_model[-7]}/', force=True)
 
     if train:
         print("---------- Training ", agent_name, "----------")
@@ -102,9 +101,7 @@ if __name__ == "__main__":
                      
             while not done:
                 action = model(np.array([obs]))[0]
-                obs, reward, done, info, _ = env.step(action)
+                obs, reward, done, _ = env.step(action)
                 total_reward += reward
                 print(reward)
-                if params['save_video']:
-                    vid.capture_frame()
             print("Total Reward: ", total_reward)
