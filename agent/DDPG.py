@@ -33,7 +33,7 @@ class DDPGAgent():
     def __init__(self, params):
 
         # Configs & Hyperparameters
-        self.name = "{}_{}Actions".format(params['agent'], params['arch'])
+        self.name = "{}Actions".format(params['agent'])
         self.num_actions = params['num_actions']        
         self.obs_dim = tuple(params['obs_dim'])
         self.epochs = params['num_epochs']
@@ -179,7 +179,7 @@ class DDPGAgent():
         """Initialize Networks For Weights To Be Loaded"""
         n_steps = 0
         while n_steps <= self.batch_size:
-            action = 1
+            action = [1]
             obs_, reward, done = obs, 1, False
             self.remember(np.expand_dims(obs/255, axis=0), action,
                           reward, np.expand_dims(obs_/255, axis=0), done)
@@ -363,7 +363,7 @@ class Critic(Model):
 
         self.model_name = name
         # Location to Load/Save model
-        self.checkpoint_dir = "models"
+        self.checkpoint_dir = "models/DDPG_train" if params['train'] else params['load_model']
         # Training Model Save
         self.checkpoint_file_train = os.path.join(self.checkpoint_dir, self.model_name+'_ddpg_train.h5')
         # Best Model Save
@@ -399,7 +399,7 @@ class Actor(Model):
 
         self.model_name = name
         # Location to Load/Save model
-        self.checkpoint_dir = "models"
+        self.checkpoint_dir = "models/DDPG_train" if params['train'] else params['load_model']
         # Train Model Save
         self.checkpoint_file_train = os.path.join(
             self.checkpoint_dir, self.model_name+'_ddpg_train.h5')

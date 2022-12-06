@@ -20,7 +20,7 @@ class opts(object):
         self.parser.add_argument('--obs_dim', default=(2,18,18), type=int, nargs=3, help='Agent Observation Space')
         self.parser.add_argument('--num_actions', default=1, type=int, help='Agent Action Space')
         self.parser.add_argument('--all_random', action='store_true', help='Whether to Train on All Random Vehicles')
-        self.parser.add_argument('--spawn_vehicles', default=0, type=int, help='Number of Non-Agent Vehicles to Spawn, Set 0 to Disable')
+        self.parser.add_argument('--spawn_vehicles', default=3, type=int, help='Number of Non-Agent Vehicles to Spawn, Set 0 to Disable')
         self.parser.add_argument('--random_lane', action='store_true', help='Whether to Randomize Agent Spawn Lane')
         self.parser.add_argument('--offroad_thres', default=-1, type=int, help='Number of Steps Agent is Allowed to Ride Offroad')
         

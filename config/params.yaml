@@ -1,16 +1,16 @@
 ##### GENERAL PARAMETERS #####
-exp_id: "train_a3c"         # Name for log files and checkpoints
-agent: "A3C"                # Agent: "PPO", "DDPG", "A3C"
-train: True                 # Mode: Train or Test, (Set False for test mode)
+exp_id: "train_PPO"         # Name for log files and checkpoints
+agent: "PPO"                # Agent: "PPO", "DDPG", "A3C"
+train: True              # Mode: Train or Test, (Set False for test mode)
 resume: False               # Whether to Load Last Model for Further Training
 save_model: True            
 save_video: False
-load_model: ""              # Model to load for Testing
+load_model: "models/PPO.model"              # Model to load for Testing
 ##############################
 
 ##### TRAINING PARAMETERS ######
 num_episodes: 5000
-batch_size: 256             # IMPORTANT: Set to 64 for DDPG Agent
+batch_size: 256         # IMPORTANT: Set to 64 for DDPG Agent
 num_epochs: 10
 lr: 0.0005
 lr_decay: True

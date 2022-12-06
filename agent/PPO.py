@@ -16,7 +16,7 @@ class PPO():
     """Proximal Policy Optimisation Agent with Clipping"""
     def __init__(self, params):
             # Configs & Hyperparameters
-            self.name = "{}_{}_{}Actions".format(params['agent'], params['arch'], params['num_actions'])
+            self.name = "{}_{}Actions".format(params['agent'],params['num_actions'])
             self.lr = params['lr']
             self.epochs = params['num_epochs']
             self.batch_size = params['batch_size']
