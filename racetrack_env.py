@@ -41,7 +41,7 @@ class RaceTrackEnv(AbstractEnv):
                 "as_image": False,
                 "align_to_vehicle_axes": True
                 
-            } if params['obs_dim'] == 2 else {
+            } if params['obs_dim'][0] == 2 else {
                 
                 "type": "GrayscaleObservation",
                 "observation_shape": tuple(params['obs_dim'][-2:]),
