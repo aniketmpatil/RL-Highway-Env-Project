@@ -211,8 +211,8 @@ class PPO():
         done = mem["done"][-1]
         last_ep_starts = mem["last_ep_starts"]
         
-        g = self.GAE_GAMMA
-        l = self.GAE_LAMBDA
+        g = self.GAE_GAMMA   # discount factor
+        l = self.GAE_LAMBDA  # smaoothing parameter used to reduce variance in training which makes it more stable
 
         # Initialise Return Arrays with Appropriate Shapes
         advantages = np.empty((self.memory_size,))
@@ -221,6 +221,7 @@ class PPO():
         # Calculate Advantages & Returns
         last_adv = 0
 
+        # GAE - Generalized Advantage Estimation Algorithm
         for step in reversed(range(self.memory_size)):
             if step == self.memory_size - 1:
                 next_non_terminal = 1.0 - done
@@ -298,10 +299,12 @@ class PPO():
                     entropy = self.policy.entropy()
                     e_loss = -tf.reduce_mean(entropy)
 
+                    # Critic Loss
                     # Value Loss - squared error loss of returns and v_pred
                     c_loss = self.val_loss(returns, v_pred)
 
                     # Final objective function
+                    # Total_Loss = critic_loss * critic_discount + actor_loss - entropy
                     tot_loss = 0.5 * c_loss + a_loss + self.ENTROPY * e_loss
                 
                 # Compute KL Divergence for Early Stopping Before Backprop
