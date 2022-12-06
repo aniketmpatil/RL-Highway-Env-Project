@@ -4,7 +4,7 @@
 
 ### Members: [Rutwik Bonde](https://github.com/Rubo12345), [Prathamesh Bhamare](https://github.com/Prathamesh1411), [Aniket Patil](https://github.com/aniketmpatil) - Master of Science in Robotics Engineering
 
-### [Link to Project Report](./Reinforcement_Learning_Course_Project.pdf)
+### [Link to Project Report](./outputs/RL_Project_Report_Group10.pdf)
 
 ---
 
@@ -13,6 +13,13 @@ Our goal is to train RL agents to navigate ego vehicle safely within `racetrack-
 
 ---
 
+## Training Outputs
+
+<!-- <img src="./outputs/Final_Results_PPO.png" alt="drawing" width="500"/>
+<img src="./outputs/Final_Results_DDPG.png" alt="drawing" width="500"/>
+<img src="./outputs/Final_Results_A3C.png" alt="drawing" width="500"/> -->
+
+---
 ## Procedure:
 
 ### Training: 
