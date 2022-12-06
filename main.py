@@ -2,7 +2,6 @@ from gym.wrappers import Monitor
 import yaml, os, argparse
 import numpy as np
 import tensorflow.keras as keras
-import matplotlib.pyplot as plt
 
 ## Import Environment
 from racetrack_env import RaceTrackEnv
