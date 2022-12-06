@@ -9,7 +9,7 @@ from racetrack_env import RaceTrackEnv
 ## Import all agents
 from agent.A3C import A3CAgent
 from agent.DDPG import DDPGAgent
-from agent.PPO import PPOAgent
+from agent.PPO import PPO
 
 class opts(object):
     def __init__(self):
@@ -70,7 +70,7 @@ if __name__ == "__main__":
             agent = A3CAgent(params)
             agent.learn(env, opt, params)
         elif agent_name == "PPO":
-            agent = PPOAgent(params)
+            agent = PPO(params)
             agent.learn(env, params)
         elif agent_name == "DDPG":
             agent = DDPGAgent(params)
